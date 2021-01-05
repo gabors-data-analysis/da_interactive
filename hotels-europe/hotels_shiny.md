@@ -93,6 +93,47 @@ We will offer potential **analytical tasks**:
 	3. Allow modify functional form for trendline (linear, lowess, quadratic, cubic )
 3. Show measures of correlation
 	1. correlation coefficient	
+	2. print out OLS model coefficients: constant: 0.05 (95% CI is 0.02 to 0.08), slope: -0.12 (95% CI is -0.1 to -0.14) [NEW]
+
+
+## Regression [NEW]
+
+It should be able to manage two models, Model A and Model B - sample sample, same y, different set of X.
+
+1. Select sample
+	1. Pick a city
+	2. Pick a date
+	3. Same sample design (default is none)
+2. Pick y (default is price)
+3. Pick any number of x for Model A (default is distance)
+4. Pick any number of x for Model B (default is distance and stars) (log distance is a new variable vs distance, called `log_distance`)
+5. Display
+
+
+| 			| Model A  	| Model B   |
+|-----------|-----------|-----------|
+|**distance**   | **0.20**  		| **0.11**	    |
+|95% CI     | 0.15-0.25	| 0.00-0.22   |
+|   		|  			|	  	    |
+|**stars**      |  		| **0.22**	    |
+|95% CI     | 	| 0.13-0.30   |
+|   		|  			|	  	    |
+|R-squared	| 0.21 			| 0.25	  	    |
+
+If coefficient number is
+- below 10, 2 decimals after zero 
+- between 10- 100, 1 digit,
+- above 100, 0 digit,
+
+
+
+
+
+Notes
+1. transform to log tick may be added to all variables
+a. Only offer to transform to log if non-negative
+b. 0 should be replaced with 0.1 for distance	
+
 
 Can wait/Later to add
 1. if transformed, use a ln friendly scale, 1,2,5,10, 20, 50, 100
