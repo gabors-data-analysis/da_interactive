@@ -11,12 +11,17 @@ library(shiny)
 library(ggplot2)
 library(pander)
 library(plotly)
+source("theme_bg.R")
+
+line_color <- 'black'
+
+
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage(
 
     # Application title
-    titlePanel("CEU DA Interactive Visualization"),
+    titlePanel("Gabors Interactive Data Analysis"),
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -32,66 +37,174 @@ shinyUI(fluidPage(
             tabsetPanel(type = "tabs",
                         
                         tabPanel("Describe data for a city",
-                                 "Under development - Describe data for a city",
-                                 
-                                 uiOutput('desc_sel_city'),
-                                 uiOutput('desc_sel_date'),
-                                 
-                                 uiOutput('desc_sel_three_variables'),
-                                 
-                                 
-                                 plotlyOutput("desc_histogram"),
-                                 verbatimTextOutput("desc_summary")
-                                 ),
+                                 fluidPage(
+                                     fluidRow(
+                                         column(3,
+                                                h3("Data selection"),
+                                                uiOutput('desc_sel_city'),
+                                                uiOutput('desc_sel_date'),
+                                                uiOutput('desc_sel_three_variables'),
+                                                uiOutput('desc_sel_three_variables_factor')),
+                                         column(3, 
+                                                h3("Data filtering"),
+                                                uiOutput('desc_filter_check'),
+                                                uiOutput('desc_filters')),
+                                         column(3,
+                                                h3("Selected and filtered data summary"),
+                                                fluidRow(tableOutput("desc_summary"),
+                                                tableOutput("desc_summary_factor"),
+                                                style='margin-bottom:30px;border:1px solid; padding: 10px;'))
+                                     ),
+                                     fluidRow(
+                                         tags$hr(style=paste0("border-color:", line_color)), 
+                                     ),
+                                    fluidRow(
+                                        h3("Selected and filtered data histograms"),
+                                         plotOutput("desc_histogram"))
+                                 )),
                             
-                            tabPanel("Compare two cities", 
-                                 "Under development - Compare two cities",
-                                 
-                                 uiOutput('comp_sel_cities'),
-                                 uiOutput('comp_sel_date'),
-                                 
-                                 uiOutput('comp_sel_three_variables'),
-                                 
-                                 "TODO: filtering extreme values tickmark & extreme value definition input for each var.",
-                                 
-                                plotlyOutput("comp_density"),
-                                 verbatimTextOutput("comp_summary")
-
-
-                                 ),
-                  
+                            tabPanel("Compare two cities",
+                                     fluidPage(
+                                         fluidRow(
+                                             column(3,
+                                                    h3("Data selection"),
+                                                    uiOutput('comp_sel_cities'),
+                                                    uiOutput('comp_sel_date'),
+                                                    uiOutput('comp_sel_three_variables'),
+                                                    uiOutput('comp_sel_three_variables_factor')),
+                                             column(3, 
+                                                    h3("Data filtering"),
+                                                    uiOutput('comp_filter_check'),
+                                                    uiOutput('comp_filters')),
+                                             column(3,
+                                                    h3("Selected and filtered data summary"), h4(textOutput('comp_city_1')),
+                                                    fluidRow(tableOutput("comp_summary_1"),
+                                                             tableOutput("comp_summary_factor_1"),
+                                                             style='margin-bottom:30px;border:1px solid; padding: 10px;')),
+                                             
+                                             column(3,
+                                                    h3("Selected and filtered data summary"), h4(textOutput('comp_city_2')),
+                                                    fluidRow(tableOutput("comp_summary_2"),
+                                                     tableOutput("comp_summary_factor_2"),
+                                                     style='margin-bottom:30px;border:1px solid; padding: 10px;'))
+                                         ),
+                                         fluidRow(
+                                             tags$hr(style=paste0("border-color:", line_color)), 
+                                         ),
+                                         fluidRow(
+                                             h3("Selected and filtered data histograms"),
+                                             plotOutput("comp_histogram"))
+                                     )),
                                  
                         tabPanel("Correlation and scatterplotting", 
-                                 "Under development - Correlation",
-                                 uiOutput('corr_sel_city'),
-                                 uiOutput('corr_sel_date'),
-                                 
-                                 uiOutput('corr_sel_x'),
-                                 uiOutput('corr_sel_x_ff'),
-                                 
-                                 uiOutput('corr_sel_y'),
-                                 uiOutput('corr_sel_y_ff'),
-                                 
-                                 uiOutput('corr_trendline_type'),
-                                 
-                                 
-                                 
-                                 "TODO: filtering extreme values tickmark & extreme value definition input for each var.",
-                                 
-                                 h3("Correlation:"),
-                                 verbatimTextOutput("corr_corr"),
-                                 
 
-                                 plotlyOutput("corr_scatterplot")),
+                                 fluidPage(
+                                     fluidRow(
+                                         h3("Data selection"),
+                                         column(4, uiOutput('corr_sel_city'),
+                                                uiOutput('corr_sel_date')))),
+                                 
+                                 
+                                 fluidPage(
+                                     fluidRow(
+                                         column(4, ""),
+                                         column(4, uiOutput('corr_filter_check')))),
+                                                
+                                 
+                                 fluidPage(
+                                     fluidRow(
+                                         h3("Data selection, manipulation and filtration"),
+                                         
+                                         column(2,uiOutput('corr_sel_x')),
+                                         column(2, uiOutput('corr_sel_x_ff')),
+                                         column(2, uiOutput('corr_sel_x_filter'))),
+                                 
+                                     fluidRow(
+                                         column(2, uiOutput('corr_sel_y')),
+                                         column(2, uiOutput('corr_sel_y_ff')),
+                                         column(2, uiOutput('corr_sel_y_filter')))),
+                                 
+                            
+                                 tags$hr(style=paste0("border-color:", line_color)),
+                                 
+                                htmlOutput("corr_corr"),
+                                fluidPage(
+                                    fluidRow(
+                                        column(12,
+                                    h3("Selected and filtered data histograms"),
+                                         uiOutput('corr_trendline_type'),
+                                                    plotOutput("corr_scatterplot"))))),
                         
                         
                         tabPanel("Multivariate regression", 
-                                 "Under development - Multivariate regression"),
+                                 fluidPage(
+                                     fluidRow(
+                                         column(3,
+                                                h3("Data selection"),
+                                                uiOutput('reg_sel_city'),
+                                                uiOutput('reg_sel_date'),
+                                               uiOutput('reg_sel_dependent')),
+                                         
+                                         column(3,
+                                                h3("Regression A"),
+                                                uiOutput('reg_sel_three_variables_A'),
+                                                uiOutput('reg_sel_three_variables_factor_A'),
+                                                uiOutput('reg_r_2_reg_A'),
+                                                tags$hr(style=paste0("border-color:", line_color)),
+                                                tableOutput('reg_reg_table_A')),
+                                         column(3,
+                                                h3("Regression B"),
+                                                uiOutput('reg_sel_three_variables_B'),
+                                                uiOutput('reg_sel_three_variables_factor_B'),
+                                                uiOutput('reg_r_2_reg_B'),
+                                                tags$hr(style=paste0("border-color:", line_color)),
+                                                tableOutput('reg_reg_table_B')),
+                                         column(3,
+                                                h3("Regression C"),
+                                                uiOutput('reg_sel_three_variables_C'),
+                                                uiOutput('reg_sel_three_variables_factor_C'),
+                                                uiOutput('reg_r_2_reg_C'),
+                                                tags$hr(style=paste0("border-color:", line_color)),
+                                                tableOutput('reg_reg_table_C'))
+                        )),
+                        tags$hr(style=paste0("border-color:", line_color))),
                         
-                        
-                        tabPanel("Prediction", 
-                                 "Under development - Correlation & histograms"))
-                                 
+                        tabPanel("Comparing regressions",
+                                 fluidPage(
+                                   fluidRow(
+                                     column(3,
+                                            h3("Data selection"),
+                                            uiOutput('compreg_sel_three_variables'),
+                                            uiOutput('compreg_sel_three_variables_factor'),
+                                            uiOutput('compreg_sel_dependent')),
+                                     column(3,
+                                            h3("Data and city A"),
+                                            uiOutput('compreg_sel_city_A'),
+                                            uiOutput('compreg_sel_date_A'),
+                                            uiOutput('compreg_r_2_reg_A'),
+                                            tags$hr(style=paste0("border-color:", line_color)),
+                                            tableOutput('compreg_reg_table_A')),
+                                     column(3,
+                                            h3("Data and city B"),
+                                            uiOutput('compreg_sel_city_B'),
+                                            uiOutput('compreg_sel_date_B'),
+                                            uiOutput('compreg_r_2_reg_B'),
+                                            tags$hr(style=paste0("border-color:", line_color)),
+                                            tableOutput('compreg_reg_table_B')),
+                                     column(3,
+                                            h3("Data and city C"),
+                                            uiOutput('compreg_sel_city_C'),
+                                            uiOutput('compreg_sel_date_C'),
+                                            uiOutput('compreg_r_2_reg_C'),
+                                            tags$hr(style=paste0("border-color:", line_color)),
+                                            tableOutput('compreg_reg_table_C')),
+                                            )))
+                        ),
+        
+                        tags$hr(style=paste0("border-color:", line_color)),
+                       # tabPanel("About")
+                       fluidRow(column(12, align = "center", 
+                                       htmlOutput("about")))
                       
             , width = '100%'
             
