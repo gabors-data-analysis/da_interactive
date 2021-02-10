@@ -11,6 +11,7 @@ library(shiny)
 library(ggplot2)
 library(pander)
 library(plotly)
+library(shinythemes)
 source("theme_bg.R")
 
 line_color <- 'black'
@@ -18,7 +19,7 @@ line_color <- 'black'
 
 
 # Define UI for application that draws a histogram
-shinyUI(fluidPage(
+shinyUI(fluidPage( theme = shinytheme("lumen"),
 
     # Application title
     titlePanel("Gabors Interactive Data Analysis"),
@@ -113,7 +114,7 @@ shinyUI(fluidPage(
                                  
                                  fluidPage(
                                      fluidRow(
-                                         h3("Data selection, manipulation and filtration"),
+                                         h3("Data selection, manipulation and filtering"),
                                          
                                          column(2,uiOutput('corr_sel_x')),
                                          column(2, uiOutput('corr_sel_x_ff')),
@@ -127,13 +128,15 @@ shinyUI(fluidPage(
                             
                                  tags$hr(style=paste0("border-color:", line_color)),
                                  
-                                htmlOutput("corr_corr"),
                                 fluidPage(
                                     fluidRow(
                                         column(12,
-                                    h3("Selected and filtered data histograms"),
-                                         uiOutput('corr_trendline_type'),
-                                                    plotOutput("corr_scatterplot"))))),
+                                    h3("Scatterplot and fitted regression line"),
+                                         uiOutput('corr_regressionline_type'),
+                                        uiOutput('corr_ci'),
+                                    
+                                         htmlOutput("corr_corr"),
+                                         plotOutput("corr_scatterplot"))))),
                         
                         
                         tabPanel("Multivariate regression", 
@@ -151,7 +154,8 @@ shinyUI(fluidPage(
                                                 uiOutput('reg_sel_three_variables_factor_A'),
                                                 uiOutput('reg_r_2_reg_A'),
                                                 tags$hr(style=paste0("border-color:", line_color)),
-                                                tableOutput('reg_reg_table_A')),
+                                                tableOutput('reg_reg_table_A'),
+                                                "Linear regression (OLS). Values that are statistically different from zero are denoted by a star."),
                                          column(3,
                                                 h3("Regression B"),
                                                 uiOutput('reg_sel_three_variables_B'),
@@ -165,7 +169,8 @@ shinyUI(fluidPage(
                                                 uiOutput('reg_sel_three_variables_factor_C'),
                                                 uiOutput('reg_r_2_reg_C'),
                                                 tags$hr(style=paste0("border-color:", line_color)),
-                                                tableOutput('reg_reg_table_C'))
+                                                tableOutput('reg_reg_table_C')
+                                     )
                         )),
                         tags$hr(style=paste0("border-color:", line_color))),
                         
@@ -178,33 +183,37 @@ shinyUI(fluidPage(
                                             uiOutput('compreg_sel_three_variables_factor'),
                                             uiOutput('compreg_sel_dependent')),
                                      column(3,
-                                            h3("Data and city A"),
+                                            h3("Date and city A"),
                                             uiOutput('compreg_sel_city_A'),
                                             uiOutput('compreg_sel_date_A'),
                                             uiOutput('compreg_r_2_reg_A'),
                                             tags$hr(style=paste0("border-color:", line_color)),
-                                            tableOutput('compreg_reg_table_A')),
+                                            tableOutput('compreg_reg_table_A'),
+                                            "Linear regression (OLS). Values that are statistically different from zero are denoted by a star."),
                                      column(3,
-                                            h3("Data and city B"),
+                                            h3("Date and city B"),
                                             uiOutput('compreg_sel_city_B'),
                                             uiOutput('compreg_sel_date_B'),
                                             uiOutput('compreg_r_2_reg_B'),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_B')),
                                      column(3,
-                                            h3("Data and city C"),
+                                            h3("Date and city C"),
                                             uiOutput('compreg_sel_city_C'),
                                             uiOutput('compreg_sel_date_C'),
                                             uiOutput('compreg_r_2_reg_C'),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_C')),
-                                            )))
+                                            ))),
+                        tabPanel("About the project",
+                                 uiOutput('about'))
+                                 
                         ),
         
                         tags$hr(style=paste0("border-color:", line_color)),
                        # tabPanel("About")
                        fluidRow(column(12, align = "center", 
-                                       htmlOutput("about")))
+                                       htmlOutput("footnote")))
                       
             , width = '100%'
             
