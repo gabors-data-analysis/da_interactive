@@ -119,7 +119,8 @@ shinyServer(function(input, output) {
     
     # Render the sliders
     output$desc_filters <- renderUI({
-
+        req(desc_reactive_table())
+        
         data_ <- data %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
             select(c(input$desc_sel_three_variables, input$desc_sel_three_variables_factor))
@@ -404,6 +405,8 @@ shinyServer(function(input, output) {
     
     # Render the sliders
     output$comp_filters <- renderUI({
+        req(comp_reactive_table())
+        
         data_ <- data %>% 
             filter(city %in% input$comp_sel_cities & date == input$comp_sel_date) %>% 
             select(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
@@ -613,6 +616,7 @@ shinyServer(function(input, output) {
     
     output$comp_summary_1 <- renderTable({
         req(comp_reactive_table())
+        
         data_ <- comp_reactive_table()
         
         ## Filtering ends
@@ -637,6 +641,7 @@ shinyServer(function(input, output) {
     
     output$comp_summary_factor_1 <- renderTable({
         req(comp_reactive_table())
+        
         data_ <- comp_reactive_table()
         
         ## Filtering ends
@@ -786,6 +791,8 @@ shinyServer(function(input, output) {
         })
 
     output$corr_sel_x_filter <- renderUI({
+        req(input$corr_sel_x)
+        
         data_ <- data %>% 
             filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
             select(input$corr_sel_x, input$corr_sel_y)
@@ -813,6 +820,8 @@ shinyServer(function(input, output) {
     
     
     output$corr_sel_y_filter <- renderUI({
+        req(input$corr_sel_x)
+        
         data_ <- data %>% 
             filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
             select(input$corr_sel_y, input$corr_sel_y)
@@ -890,6 +899,8 @@ shinyServer(function(input, output) {
     
     ### Plots
     output$corr_scatterplot <- renderPlot({
+        req(input$corr_sel_x)
+        
         if(is.null(input$corr_sel_x) || is.null(input$corr_sel_y)){return()}
         
         data_ <- data %>% 
@@ -950,6 +961,8 @@ shinyServer(function(input, output) {
     })
     
     output$corr_corr <- renderUI({
+        req(input$corr_sel_x)
+        
         if(!is.numeric(data[[input$corr_sel_x]]) || !is.numeric(data[[input$corr_sel_y]])){return("Correlation only makes sense with numeric variables")}
         
         data_ <- data %>% 
@@ -1139,6 +1152,8 @@ output$reg_filters <- renderUI({
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$reg_reg_table_A <- renderTable({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
     select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
@@ -1169,6 +1184,8 @@ output$reg_reg_table_A <- renderTable({
 
 
 output$reg_r_2_reg_A <- renderUI({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
@@ -1190,6 +1207,8 @@ output$reg_r_2_reg_A <- renderUI({
 
 
 output$reg_reg_table_B <- renderTable({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city", input$reg_sel_dependent), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
         drop_na() %>%
@@ -1219,6 +1238,8 @@ output$reg_reg_table_B <- renderTable({
 
 
 output$reg_r_2_reg_B <- renderUI({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
         drop_na() %>%
@@ -1240,6 +1261,8 @@ output$reg_r_2_reg_B <- renderUI({
 
 
 output$reg_reg_table_C <- renderTable({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>% 
         drop_na() %>% 
@@ -1270,6 +1293,8 @@ output$reg_reg_table_C <- renderTable({
 
 
 output$reg_r_2_reg_C <- renderUI({
+    req(input$reg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>%
         drop_na() %>%
@@ -1364,6 +1389,8 @@ output$compreg_sel_date_A <- renderUI({
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_A <- renderTable({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -1394,6 +1421,8 @@ output$compreg_reg_table_A <- renderTable({
 
 
 output$compreg_r_2_reg_A <- renderUI({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -1439,6 +1468,8 @@ output$compreg_sel_date_B <- renderUI({
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_B <- renderTable({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -1469,6 +1500,8 @@ output$compreg_reg_table_B <- renderTable({
 
 
 output$compreg_r_2_reg_B <- renderUI({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -1514,6 +1547,8 @@ output$compreg_sel_date_C <- renderUI({
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_C <- renderTable({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -1544,6 +1579,8 @@ output$compreg_reg_table_C <- renderTable({
 
 
 output$compreg_r_2_reg_C <- renderUI({
+    req(input$compreg_sel_dependent)
+    
     data_ <- data_reg %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
