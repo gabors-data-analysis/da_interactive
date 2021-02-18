@@ -16,11 +16,11 @@ source("theme_bg.R")
 
 line_color <- 'black'
 
-
+background_hex <- "#f2e6d9"
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage( theme = shinytheme("lumen"),
-
+                   setBackgroundColor(background_hex),
     # Application title
     titlePanel("Gabors Interactive Data Analysis"),
 
@@ -61,7 +61,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                      ),
                                     fluidRow(
                                         h3("Selected and filtered data histograms"),
-                                         plotOutput("desc_histogram"))
+                                         plotOutput("desc_histogram"),
+                                        plotOutput("desc_histogram_factor"))
                                  )),
                             
                             tabPanel("Compare two cities",
@@ -97,7 +98,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                              plotOutput("comp_histogram"))
                                      )),
                                  
-                        tabPanel("Correlation and scatterplotting", 
+                        tabPanel("Correlation", 
 
                                  fluidPage(
                                      fluidRow(

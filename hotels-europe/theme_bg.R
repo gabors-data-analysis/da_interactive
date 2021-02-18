@@ -41,6 +41,8 @@ library(scales)
 # this is derived from CMYK color scheme by Cambridge University Press for print
 color <- c("#3a5e8cFF", "#10a53dFF", "#541352FF", "#ffcf20FF", "#2f9aa0FF")
 #blue  #3a5e8c   # purple #541352    teal #2f9aa0  yellow #ffcf20   # green #10a53d
+
+background_hex <- "#f2e6d9"
 show_col(color)
 
 color.outline = "#FFFFFF"
@@ -48,8 +50,8 @@ color.outline = "#FFFFFF"
 color.regline = "#000000"
 color.statline = "#4D4D4D"
 color.stat = "#000000"
-color.background = "grey80"
-color.fill = "#000000"
+color.background = background_hex
+color.fill = background_hex
 
 color.fill = "#0000FF"
 color.fill2 ="#ADD8E6"
@@ -60,13 +62,13 @@ color.fill3 = "#FF8C00"
 theme_bg <- function() {
   
   # Generate color palette
-  palette <- c("white", 
+  palette <- c(background_hex, 
                "grey70", 
                "black",
                "grey50") # global
   
   color.background
-  color.background = palette[1]
+  color.background = background_hex
   color.grid.major = palette[4]
   color.grid.minor = palette[2]
   color.axis.text = palette[3]
@@ -74,7 +76,7 @@ theme_bg <- function() {
   color.title = palette[3]
   
   #  palette_brewer <- brewer.pal("Blues", n=9)
-  color.fill <- palette[1]
+  color.fill <- background_hex
   color.line <- palette[3]
   
   # Chart elements
