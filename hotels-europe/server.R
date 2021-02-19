@@ -50,7 +50,17 @@ shinyServer(function(input, output) {
         select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat, 
                accommodation_type, city_actual, neighbourhood) %>%
         filter(stars >= 2) %>% 
-        mutate(rating = as.factor(rating),
+        mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
+                                           "Apartment",
+                                           ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Pension"),
+                                                  "Guest House",
+                                                  ifelse(accommodation_type %in% c("Hotel", "Inn", "Apart-hotel"),
+                                                         "Hotel",
+                                                  "Other"))),
+               accommodation_type = as.factor(accommodation_type_2)) %>%
+        select(-accommodation_type_2) %>% 
+        # filter(accommodation_type %notin% c("Hotel", "Guest House", "Apartment")) %>%
+        mutate(rating = rating,
                stars = as.factor(stars)) %>%
         mutate(offer_cat =  str_extract(offer_cat, "[^ ]+")) %>%
         mutate(offer_cat = as.factor(offer_cat)) %>%
@@ -58,19 +68,20 @@ shinyServer(function(input, output) {
         mutate(offer_cat = ifelse(offer_cat %in% c("0%", "1-15%"), "Regular (base)",
                                   ifelse(offer_cat %in% c("15-50%"), "Discount",
                                                           "Sale"))) %>%
-        # mutate(accommodation_type = ifelse(accommodation_type %in% c()))
+        mutate(city_actual = ifelse(as.character(city_actual) == as.character(city), T, F)) %>%
         plyr::rename(c("rating_reviewcount" = "N_rating_review",
                        "offer_cat" = "Offer_Cat",
                        "neighbourhood" = "Nh",
                        "accommodation_type" = "acc_")) %>%
-        select(sapply(., class) %>% .[order(match(., my.order))] %>% names) 
+        select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
     
-    unique(data$acc_)
     
     data_reg <- data %>% mutate(ln_price = log(price),
                                 ln_distance = log(distance),
-                                `ln_N_rating_review` = log(`N_rating_review`))
+                                `ln_N_rating_review` = log(`N_rating_review`)) %>% 
+        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city)
         
+    
     
 
     
@@ -355,6 +366,30 @@ shinyServer(function(input, output) {
     }, bg = background_hex)
     
         
+    output$desc_nrows <- renderUI({
+        data_ <- data
+        
+        if(input$desc_filter_check == TRUE){
+            for(i in input$desc_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$desc_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }        
+        ## Filtering ends
+        data_ <- data_ %>% 
+            filter(city == input$desc_sel_city & date == input$desc_sel_date) %>%
+            select(input$desc_sel_three_variables) 
+        
+        HTML(paste0('Number of observations: ', nrow(data_)))
+        
+    })
+    
     
     #### Show basic descriptive stats table:  (mean, sd, median, min, max, p5, p95)
     output$desc_summary <- renderTable({
@@ -490,8 +525,6 @@ shinyServer(function(input, output) {
     
     # Render the sliders
     output$comp_filters <- renderUI({
-        req(comp_reactive_table())
-        
         data_ <- data %>% 
             filter(city %in% input$comp_sel_cities & date == input$comp_sel_date) %>% 
             select(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
@@ -531,9 +564,7 @@ shinyServer(function(input, output) {
     })
     
     
-    comp_reactive_table <- reactive({
-        req(input$comp_sel_date)
-        ### Filtering
+    output$comp_histogram <- renderPlot({
         data_ <- data
         
         if(input$comp_filter_check == TRUE){
@@ -547,17 +578,8 @@ shinyServer(function(input, output) {
                 data_ <- data_ %>%
                     filter(get(i) %in% filter_obj)
             }
-        }
-        ## Filtering ends
-        
-        data_
-    })
-    
-    output$comp_histogram <- renderPlot({
-        req(comp_reactive_table)
-        
-        data_ <- comp_reactive_table()
-        
+        }        
+
         
         data_c <- data %>%
             filter(city %in% input$comp_sel_cities & date == input$comp_sel_date) %>%
@@ -704,9 +726,20 @@ shinyServer(function(input, output) {
     
     
     output$comp_summary_1 <- renderTable({
-        req(comp_reactive_table())
+        data_ <- data
         
-        data_ <- comp_reactive_table()
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -728,10 +761,65 @@ shinyServer(function(input, output) {
         b
     })
     
-    output$comp_summary_factor_1 <- renderTable({
-        req(comp_reactive_table())
+    output$comp_nrows_1 <- renderUI({
+        data_ <- data
         
-        data_ <- comp_reactive_table()
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }
+        
+        data_ <- data_ %>% 
+            filter(city == input$comp_sel_cities[1] & date == input$comp_sel_date)
+        
+        HTML(paste0('Number of observations: ', nrow(data_)))
+    })        
+
+    output$comp_nrows_2 <- renderUI({
+        data_ <- data
+        
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }
+        
+        data_ <- data_ %>% 
+            filter(city == input$comp_sel_cities[2] & date == input$comp_sel_date)
+        
+        HTML(paste0('Number of observations: ', nrow(data_)))
+    })    
+    
+    output$comp_summary_factor_1 <- renderTable({
+        data_ <- data
+        
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -754,8 +842,20 @@ shinyServer(function(input, output) {
     })
     
     output$comp_summary_2 <- renderTable({
-        req(comp_reactive_table())
-        data_ <- comp_reactive_table()
+        data_ <- data
+        
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -778,8 +878,20 @@ shinyServer(function(input, output) {
     })
     
     output$comp_summary_factor_2 <- renderTable({
-        req(comp_reactive_table())
-        data_ <- comp_reactive_table()
+        data_ <- data
+        
+        if(input$comp_filter_check == TRUE){
+            for(i in input$comp_sel_three_variables){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            for(i in input$comp_sel_three_variables_factor){
+                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
+            }
+        }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -985,6 +1097,29 @@ shinyServer(function(input, output) {
                      selected = "No")
     })
     
+    
+    output$corr_nrows <- renderUI({
+        if(is.null(input$corr_sel_x) || is.null(input$corr_sel_y)){return()}
+        
+        data_ <- data %>% 
+            filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
+            select(input$corr_sel_x, input$corr_sel_y)
+        # 
+        # data_[input$corr_sel_x] <- ifelse(input$corr_sel_x_ff == "Yes", log(data_[input$corr_sel_x]), data[input$corr_sel_x])
+        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
+        # 
+        # data_ %>% filter(get(input$corr_sel_x) < 5)
+        
+        ### Filtering
+        if(input$corr_filter_check == TRUE){
+            data_ <- data_ %>% 
+                filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
+                filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
+        }
+        
+        HTML(paste0('Number of observations: ', nrow(data_)))
+        
+    })
     
     ### Plots
     output$corr_scatterplot <- renderPlot({
@@ -1291,7 +1426,7 @@ output$reg_r_2_reg_A <- renderUI({
     reg_A <<- lm(f_A, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 1), "</b> </h4>"))
  
 })
 
@@ -1345,7 +1480,7 @@ output$reg_r_2_reg_B <- renderUI({
     reg_B <<- lm(f_B, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 1), "</b> </h4>"))
     
 })
 
@@ -1400,10 +1535,36 @@ output$reg_r_2_reg_C <- renderUI({
     reg_C <<- lm(f_C, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 1), "</b> </h4>"))
     
 })
 
+
+output$reg_nrows_reg_A <- renderUI({
+    data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+        select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
+
+
+output$reg_nrows_reg_B <- renderUI({
+    data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+        select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
+
+
+output$reg_nrows_reg_C <- renderUI({
+    data_ <- data_reg %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+        select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
 
 
 
@@ -1528,7 +1689,7 @@ output$compreg_r_2_reg_A <- renderUI({
     reg_A <<- lm(f_A, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 1), "</b> </h4>"))
     
 })
 
@@ -1607,7 +1768,7 @@ output$compreg_r_2_reg_B <- renderUI({
     reg_B <<- lm(f_B, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 1), "</b> </h4>"))
     
 })
 
@@ -1686,10 +1847,37 @@ output$compreg_r_2_reg_C <- renderUI({
     reg_C <<- lm(f_C, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 2), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 1), "</b> </h4>"))
     
 })
 
+
+
+output$compreg_nrows_A <- renderUI({
+    data_ <- data_reg %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
+        select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
+
+
+output$compreg_nrows_B <- renderUI({
+    data_ <- data_reg %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
+        select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
+
+
+output$compreg_nrows_C <- renderUI({
+    data_ <- data_reg %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
+        select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
+        drop_na() %>%
+        filter_all(all_vars(!is.infinite(.)))
+    HTML(paste0('Number of observations: ', nrow(data_)))
+})
 
 
 
@@ -1749,7 +1937,9 @@ output$variable_description <- renderUI({'<p dir="ltr" style="line-height:1.38;b
 
 
 
+output$variable_description <- renderUI({HTML('<p dir="ltr" style="line-height:1.38;background-color:#ffffff;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Variable info:&nbsp;</span></p>
+<p dir="ltr" style="line-height:1.38;background-color:#ffffff;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Numeric variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">: Price&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is USD price for a night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is from city center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance_alter</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">&nbsp;is distance from alternative center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">rating&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is average user rating,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">N_rating_review&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the count of user ratings on the website,&nbsp;</span></p>
+<p><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Categorical variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">:&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">stars&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the number of stars for the hotel (3.5 means ***+),&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">offer cat&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is various offer rates for the night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">accommodation_type&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is type of room,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">city_actual&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is binary (city_actual &nbsp;== city), 1 if hotel is in the city, 0 if satellite village,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">neighboorhood&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is city part as defined by city.&nbsp;</span></p>
+    ')})
+
 })
-
-
-

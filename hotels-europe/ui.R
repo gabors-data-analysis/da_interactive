@@ -12,6 +12,7 @@ library(ggplot2)
 library(pander)
 library(plotly)
 library(shinythemes)
+library(shinyWidgets)
 source("theme_bg.R")
 
 line_color <- 'black'
@@ -20,19 +21,19 @@ background_hex <- "#f2e6d9"
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage( theme = shinytheme("lumen"),
-                   setBackgroundColor(background_hex),
+                   shinyWidgets::setBackgroundColor(background_hex),
     # Application title
     titlePanel("Gabors Interactive Data Analysis"),
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-            
-            width = 0
+            htmlOutput("variable_description"),           
+        
+            width = 4
             
             
         ),
-        
         mainPanel(
             
             tabsetPanel(type = "tabs",
@@ -52,7 +53,9 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('desc_filters')),
                                          column(3,
                                                 h3("Selected and filtered data summary"),
-                                                fluidRow(tableOutput("desc_summary"),
+                                                fluidRow(
+                                                    htmlOutput("desc_nrows"),
+                                                    tableOutput("desc_summary"),
                                                 tableOutput("desc_summary_factor"),
                                                 style='margin-bottom:30px;border:1px solid; padding: 10px;'))
                                      ),
@@ -79,14 +82,20 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                     uiOutput('comp_filter_check'),
                                                     uiOutput('comp_filters')),
                                              column(3,
-                                                    h3("Selected and filtered data summary"), h4(textOutput('comp_city_1')),
-                                                    fluidRow(tableOutput("comp_summary_1"),
+                                                    h3("Selected and filtered data summary"),
+                                                    h4(textOutput('comp_city_1')),
+                                                    fluidRow(
+                                                        htmlOutput("comp_nrows_1"),
+                                                        tableOutput("comp_summary_1"),
                                                              tableOutput("comp_summary_factor_1"),
                                                              style='margin-bottom:30px;border:1px solid; padding: 10px;')),
                                              
                                              column(3,
-                                                    h3("Selected and filtered data summary"), h4(textOutput('comp_city_2')),
-                                                    fluidRow(tableOutput("comp_summary_2"),
+                                                    h3("Selected and filtered data summary"), 
+                                                    h4(textOutput('comp_city_2')),
+                                                    fluidRow(
+                                                        htmlOutput("comp_nrows_2"),
+                                                        tableOutput("comp_summary_2"),
                                                      tableOutput("comp_summary_factor_2"),
                                                      style='margin-bottom:30px;border:1px solid; padding: 10px;'))
                                          ),
@@ -110,7 +119,9 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                  fluidPage(
                                      fluidRow(
                                          column(4, ""),
-                                         column(4, uiOutput('corr_filter_check')))),
+                                         column(4, 
+                                                htmlOutput("corr_nrows"),
+                                                uiOutput('corr_filter_check')))),
                                                 
                                  
                                  fluidPage(
@@ -154,6 +165,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('reg_sel_three_variables_A'),
                                                 uiOutput('reg_sel_three_variables_factor_A'),
                                                 uiOutput('reg_r_2_reg_A'),
+                                                htmlOutput("reg_nrows_reg_A"),
                                                 tags$hr(style=paste0("border-color:", line_color)),
                                                 tableOutput('reg_reg_table_A'),
                                                 "Linear regression (OLS). Values that are statistically different from zero are denoted by a star."),
@@ -162,6 +174,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('reg_sel_three_variables_B'),
                                                 uiOutput('reg_sel_three_variables_factor_B'),
                                                 uiOutput('reg_r_2_reg_B'),
+                                                htmlOutput("reg_nrows_reg_B"),
                                                 tags$hr(style=paste0("border-color:", line_color)),
                                                 tableOutput('reg_reg_table_B')),
                                          column(3,
@@ -169,6 +182,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('reg_sel_three_variables_C'),
                                                 uiOutput('reg_sel_three_variables_factor_C'),
                                                 uiOutput('reg_r_2_reg_C'),
+                                                htmlOutput("reg_nrows_reg_C"),
                                                 tags$hr(style=paste0("border-color:", line_color)),
                                                 tableOutput('reg_reg_table_C')
                                      )
@@ -188,6 +202,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                             uiOutput('compreg_sel_city_A'),
                                             uiOutput('compreg_sel_date_A'),
                                             uiOutput('compreg_r_2_reg_A'),
+                                            htmlOutput("compreg_nrows_A"),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_A'),
                                             "Linear regression (OLS). Values that are statistically different from zero are denoted by a star."),
@@ -196,6 +211,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                             uiOutput('compreg_sel_city_B'),
                                             uiOutput('compreg_sel_date_B'),
                                             uiOutput('compreg_r_2_reg_B'),
+                                            htmlOutput("compreg_nrows_B"),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_B')),
                                      column(3,
@@ -203,15 +219,17 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                             uiOutput('compreg_sel_city_C'),
                                             uiOutput('compreg_sel_date_C'),
                                             uiOutput('compreg_r_2_reg_C'),
+                                            htmlOutput("compreg_nrows_C"),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_C')),
                                             ))),
+                        tabPanel("Prediction (under dev.)"),
                         tabPanel("About the project",
                                  uiOutput('about'))
                                  
                         ),
         
-                        tags$hr(style=paste0("border-color:", line_color)),
+            tags$hr(style=paste0("border-color:", line_color)),
                        # tabPanel("About")
                        fluidRow(column(12, align = "center", 
                                        htmlOutput("footnote")))
