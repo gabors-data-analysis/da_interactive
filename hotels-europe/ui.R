@@ -34,8 +34,16 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
         #     
         #     
         # )
-        
-        mainPanel(
+    
+    fluidRow(
+        column(2,
+             h3(""),
+            h3("Data filtering:"),
+            uiOutput("filter_check"),
+            uiOutput("filters")
+            
+        ),
+        column(10,
             tags$style(HTML(" .tabbable > .nav > li > a[data-value='summary'] {background-color: orange;} .tabbable > .nav > li > a[data-value='plot'] {background-color: red;} .tabbable > .nav > li > a[data-value='table'] {background-color: green;} .tabbable > .nav > li[class=active] > a {background-color: #2432d5;} ")),
             
             tabsetPanel(type = "pills",
@@ -52,7 +60,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('desc_sel_date'),
                                                 uiOutput('desc_sel_three_variables'),
                                                 uiOutput('desc_sel_three_variables_factor')),
-                                         column(3, 
+                                         column(3,
                                                 h3("Data filtering"),
                                                 uiOutput('desc_filter_check'),
                                                 uiOutput('desc_filters')),
@@ -82,10 +90,10 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                     uiOutput('comp_sel_date'),
                                                     uiOutput('comp_sel_three_variables'),
                                                     uiOutput('comp_sel_three_variables_factor')),
-                                             column(3, 
-                                                    h3("Data filtering"),
-                                                    uiOutput('comp_filter_check'),
-                                                    uiOutput('comp_filters')),
+                                             # column(3, 
+                                             #        h3("Data filtering"),
+                                             #        uiOutput('comp_filter_check'),
+                                             #        uiOutput('comp_filters')),
                                              column(3,
                                                     h3("Selected and filtered data summary"),
                                                     h4(textOutput('comp_city_1')),
@@ -125,8 +133,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                      fluidRow(
                                          column(4, ""),
                                          column(4, 
-                                                htmlOutput("corr_nrows"),
-                                                uiOutput('corr_filter_check')))),
+                                                htmlOutput("corr_nrows")))),
+                                                # uiOutput('corr_filter_check')))),
                                                 
                                  
                                  fluidPage(
@@ -134,13 +142,13 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                          h3("Data selection, manipulation and filtering"),
                                          
                                          column(2,uiOutput('corr_sel_x')),
-                                         column(2, uiOutput('corr_sel_x_ff')),
-                                         column(2, uiOutput('corr_sel_x_filter'))),
+                                         column(2, uiOutput('corr_sel_x_ff'))),
+                                         # column(2, uiOutput('corr_sel_x_filter'))),
                                  
                                      fluidRow(
                                          column(2, uiOutput('corr_sel_y')),
-                                         column(2, uiOutput('corr_sel_y_ff')),
-                                         column(2, uiOutput('corr_sel_y_filter')))),
+                                         column(2, uiOutput('corr_sel_y_ff')))),
+                                         # column(2, uiOutput('corr_sel_y_filter')))),
                                  
                             
                                  tags$hr(style=paste0("border-color:", line_color)),
@@ -163,9 +171,9 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 h3("Data selection"),
                                                 uiOutput('reg_sel_city'),
                                                 uiOutput('reg_sel_date'),
-                                               uiOutput('reg_sel_dependent'),
-                                               uiOutput('reg_filter_check'),
-                                               uiOutput('reg_filters')),
+                                               uiOutput('reg_sel_dependent')),
+                                               # uiOutput('reg_filter_check'),
+                                               # uiOutput('reg_filters')),
                                          
                                          column(3,
                                                 h3("Regression A"),
@@ -243,10 +251,10 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('pred_sel_three_variables_factor'),
                                                 uiOutput('pred_sel_interaction_terms'),
                                                 uiOutput('pred_sel_dependent')),
-                                         column(3, 
-                                                h3("Data filtering"),
-                                                uiOutput('pred_filter_check'),
-                                                uiOutput('pred_filters')),
+                                         # column(3, 
+                                         #        h3("Data filtering"),
+                                         #        uiOutput('pred_filter_check'),
+                                         #        uiOutput('pred_filters')),
                                          column(3,
                                                 h3("Date and city"),
                                                 uiOutput('pred_sel_city'),
@@ -263,7 +271,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                      tableOutput("pred_best_deals"),
                                                      h3("Worst deals"),
                                                      tableOutput("pred_worst_deals")),
-                                              column(8,
+                                              column(4,
                                                      plotOutput('pred_plot'))))),
                         tabPanel("About the project",
                                  uiOutput('about')),
@@ -283,9 +291,10 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                        fluidRow(column(12, align = "center", 
                                        htmlOutput("footnote")))
                       
-            , width = '100%'
+            # , width = '80%'
             
         
     )
+ )
 ))
 
