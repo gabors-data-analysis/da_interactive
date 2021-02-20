@@ -105,6 +105,12 @@ shinyServer(function(input, output) {
         select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
 
     
+    data_reg <- data %>% mutate(ln_price = log(price),
+                                ln_distance = log(distance),
+                                `ln_N_rating_review` = log(`N_rating_review`)) %>%
+        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city,rating)
+    
+    
     ############# BASE FILTERING ################
     
     ### Filter extreme values
@@ -186,9 +192,11 @@ shinyServer(function(input, output) {
         
         names_to_filter <- setdiff(names(data_), c("city", "date"))
         
+        data_ <- data_reg
+        
         if(input$filter_check == TRUE){
             for(i in names_to_filter){
-                if(class(data[[i]]) != 'factor'){
+                if(class(data_[[i]]) != 'factor'){
                     filter_obj <- eval(parse(text = paste0("input$filter_", i)))
                     data_ <- data_ %>%
                         filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
@@ -200,13 +208,9 @@ shinyServer(function(input, output) {
                 }
             }
         }
-        
-        data_reg <- data %>% mutate(ln_price = log(price),
-                                               ln_distance = log(distance),
-                                               `ln_N_rating_review` = log(`N_rating_review`)) %>% 
-            select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city,rating)
-        
-        data_reg
+
+
+        data_
     })
     
     
@@ -393,20 +397,20 @@ shinyServer(function(input, output) {
     output$desc_histogram <- renderPlot({
         # 
         
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$desc_filter_check == TRUE){
-            for(i in input$desc_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$desc_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }
+        # if(input$desc_filter_check == TRUE){
+        #     for(i in input$desc_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$desc_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }
         ## Filtering ends
         
         # input <- 2
@@ -444,20 +448,20 @@ shinyServer(function(input, output) {
     output$desc_histogram_factor <- renderPlot({
         # 
         
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$desc_filter_check == TRUE){
-            for(i in input$desc_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$desc_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }
+        # if(input$desc_filter_check == TRUE){
+        #     for(i in input$desc_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$desc_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }
         ## Filtering ends
         
         
@@ -492,20 +496,20 @@ shinyServer(function(input, output) {
     
         
     output$desc_nrows <- renderUI({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$desc_filter_check == TRUE){
-            for(i in input$desc_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$desc_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$desc_filter_check == TRUE){
+        #     for(i in input$desc_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$desc_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         ## Filtering ends
         data_ <- data_ %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>%
@@ -519,20 +523,20 @@ shinyServer(function(input, output) {
     #### Show basic descriptive stats table:  (mean, sd, median, min, max, p5, p95)
     output$desc_summary <- renderTable({
         
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$desc_filter_check == TRUE){
-            for(i in input$desc_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$desc_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$desc_filter_check == TRUE){
+        #     for(i in input$desc_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$desc_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         ## Filtering ends
         data_ <- data_ %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>%
@@ -554,20 +558,20 @@ shinyServer(function(input, output) {
     })
     
     output$desc_summary_factor <- renderTable({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$desc_filter_check == TRUE){
-            for(i in input$desc_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$desc_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }   
+        # if(input$desc_filter_check == TRUE){
+        #     for(i in input$desc_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$desc_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }   
         
         ## Filtering ends
         ## Factor
@@ -689,20 +693,20 @@ shinyServer(function(input, output) {
     
     
     output$comp_histogram <- renderPlot({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
 
         
         data_c <- reactive_data() %>%
@@ -850,20 +854,20 @@ shinyServer(function(input, output) {
     
     
     output$comp_summary_1 <- renderTable({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -885,20 +889,20 @@ shinyServer(function(input, output) {
     })
     
     output$comp_nrows_1 <- renderUI({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }
         
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[1] & date == input$comp_sel_date)
@@ -907,20 +911,20 @@ shinyServer(function(input, output) {
     })        
 
     output$comp_nrows_2 <- renderUI({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }
         
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[2] & date == input$comp_sel_date)
@@ -929,20 +933,20 @@ shinyServer(function(input, output) {
     })    
     
     output$comp_summary_factor_1 <- renderTable({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -965,20 +969,20 @@ shinyServer(function(input, output) {
     })
     
     output$comp_summary_2 <- renderTable({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -1000,20 +1004,20 @@ shinyServer(function(input, output) {
     })
     
     output$comp_summary_factor_2 <- renderTable({
-        data_ <- data
+        data_ <- reactive_data()
         
-        if(input$comp_filter_check == TRUE){
-            for(i in input$comp_sel_three_variables){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-            }
-            for(i in input$comp_sel_three_variables_factor){
-                filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-                data_ <- data_ %>%
-                    filter(get(i) %in% filter_obj)
-            }
-        }        
+        # if(input$comp_filter_check == TRUE){
+        #     for(i in input$comp_sel_three_variables){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+        #     }
+        #     for(i in input$comp_sel_three_variables_factor){
+        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
+        #         data_ <- data_ %>%
+        #             filter(get(i) %in% filter_obj)
+        #     }
+        # }        
         
         ## Filtering ends
         data_ <- data_ %>% 
@@ -1234,11 +1238,11 @@ shinyServer(function(input, output) {
         # data_ %>% filter(get(input$corr_sel_x) < 5)
         
         ### Filtering
-        if(input$corr_filter_check == TRUE){
-            data_ <- data_ %>% 
-                filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-                filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        }
+        # if(input$corr_filter_check == TRUE){
+        #     data_ <- data_ %>% 
+        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
+        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
+        # }
         
         HTML(paste0('Number of observations: ', nrow(data_)))
         
@@ -1260,11 +1264,11 @@ shinyServer(function(input, output) {
         # data_ %>% filter(get(input$corr_sel_x) < 5)
         
         ### Filtering
-        if(input$corr_filter_check == TRUE){
-            data_ <- data_ %>% 
-                filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-                filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        }
+        # if(input$corr_filter_check == TRUE){
+        #     data_ <- data_ %>% 
+        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
+        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
+        # }
         
         if(input$corr_regressionline_type == 'linear')
             {regressionline_type <- geom_smooth(method = "lm", formula = y ~ x, color = color[4], se = input$corr_ci)}
@@ -1320,11 +1324,11 @@ shinyServer(function(input, output) {
         
         
         ### Filtering
-        if(input$corr_filter_check == TRUE){
-            data_ <- data_ %>% 
-                filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-                filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        }
+        # if(input$corr_filter_check == TRUE){
+        #     data_ <- data_ %>% 
+        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
+        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
+        # }
         
         HTML(paste0("<h3> Correlation: </h3> <b> <h2> ", round(cor(data_[[input$corr_sel_x]], data_[[input$corr_sel_y]]), digits = 2), "</b> </h2>"))
         
@@ -1340,7 +1344,7 @@ shinyServer(function(input, output) {
 output$reg_sel_city <- renderUI({
     selectInput(inputId = "reg_sel_city",
                 label = "Select a city:",
-                choices = unique(reactive_data_reg()$city),
+                choices = unique(data_reg$city),
                 multiple = FALSE,
                 selectize = TRUE,
                 selected = "Vienna")
@@ -1350,7 +1354,7 @@ output$reg_sel_city <- renderUI({
 output$reg_sel_date <- renderUI({
     selectInput(inputId = "reg_sel_date",
                 label = "Select a date:",
-                choices = unique(reactive_data_reg()$date),
+                choices = unique(data_reg$date),
                 multiple = FALSE,
                 selectize = TRUE,
                 selected = c("2017-11-01"))
@@ -1359,7 +1363,7 @@ output$reg_sel_date <- renderUI({
 
 ### Pick a date
 output$reg_sel_dependent <- renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id"))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id"))
     
     pickerInput(inputId = "reg_sel_dependent",
                 label = "Select a dependent variable:",
@@ -1380,7 +1384,7 @@ output$reg_filter_check <- renderUI({
 
 ### Pick three variables (default: price, distance, stars)
 output$reg_sel_three_variables_A <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_A",
                 label = "Select numeric variables:",
@@ -1393,7 +1397,7 @@ output$reg_sel_three_variables_A <-renderUI({
 
 ### Pick factor variables (default: price, distance, stars)
 output$reg_sel_three_variables_factor_A <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, F, T)], c("date", "city",  ""))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, F, T)], c("date", "city",  ""))
     
     pickerInput(inputId = "reg_sel_three_variables_factor_A",
                 label = "Select categorical variables:",
@@ -1408,7 +1412,7 @@ output$reg_sel_three_variables_factor_A <-renderUI({
 
 ### Pick three variables (default: price, distance, stars)
 output$reg_sel_three_variables_B <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_B",
                 label = "Select numeric variables:",
@@ -1421,7 +1425,7 @@ output$reg_sel_three_variables_B <-renderUI({
 
 ### Pick factor variables (default: price, distance, stars)
 output$reg_sel_three_variables_factor_B <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, F, T)], c("date", "city",  ""))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, F, T)], c("date", "city",  ""))
     
     pickerInput(inputId = "reg_sel_three_variables_factor_B",
                 label = "Select categorical variables:",
@@ -1435,7 +1439,7 @@ output$reg_sel_three_variables_factor_B <-renderUI({
 
 ### Pick three variables (default: price, distance, stars)
 output$reg_sel_three_variables_C <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_C",
                 label = "Select numeric variables:",
@@ -1448,7 +1452,7 @@ output$reg_sel_three_variables_C <-renderUI({
 
 ### Pick factor variables (default: price, distance, stars)
 output$reg_sel_three_variables_factor_C <-renderUI({
-    selectable_names <- setdiff(names(reactive_data_reg())[ifelse(sapply(reactive_data_reg(), is.factor) == F, F, T)], c("date", "city",  ""))
+    selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, F, T)], c("date", "city",  ""))
     
     pickerInput(inputId = "reg_sel_three_variables_factor_C",
                 label = "Select categorical variables:",
@@ -1517,78 +1521,77 @@ output$reg_sel_interaction_terms_C <- renderUI({
 
 
 # Render the sliders
-output$reg_filters <- renderUI({
-    data_ <- reactive_data_reg() %>% 
-        filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-        select(unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A,
-                 input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B,
-               input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C)))
-    
-    xAxisGroup <- unique(names(data_))
-    
-    # First, create a list of sliders each with a different name
-    filtering_function <- function(i) {
-        inputName <- paste0("reg_filter_", xAxisGroup[i])
-        column_name <- xAxisGroup[i]
-        
-        if(class(data[[column_name]]) != 'factor'){
-            inputpanel <- sliderInput(inputName,
-                                      xAxisGroup[i],
-                                      min=min(data_[column_name], na.rm = T),
-                                      max=max(data_[column_name], na.rm = T),
-                                      value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-        }
-        else{
-            inputpanel <- selectInput(inputName,
-                                      label = xAxisGroup[i],
-                                      choices = unique(as.character(data_[[column_name]])),
-                                      multiple = TRUE,
-                                      selectize = TRUE,
-                                      selected = unique(as.character(data_[[column_name]])))
-        }
-        
-        return(conditionalPanel("input.reg_filter_check == 1", inputpanel))
-    }
-    
-    sliders <- lapply(1:length(xAxisGroup), filtering_function)
-    
-    # Create a tagList of sliders (this is important)
-    do.call(tagList, sliders)
-})
+# output$reg_filters <- renderUI({
+#     data_ <- reactive_data_reg() %>% 
+#         filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+#         select(unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A,
+#                  input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B,
+#                input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C)))
+#     
+#     xAxisGroup <- unique(names(data_))
+#     
+#     # First, create a list of sliders each with a different name
+#     filtering_function <- function(i) {
+#         inputName <- paste0("reg_filter_", xAxisGroup[i])
+#         column_name <- xAxisGroup[i]
+#         
+#         if(class(data[[column_name]]) != 'factor'){
+#             inputpanel <- sliderInput(inputName,
+#                                       xAxisGroup[i],
+#                                       min=min(data_[column_name], na.rm = T),
+#                                       max=max(data_[column_name], na.rm = T),
+#                                       value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
+#         }
+#         else{
+#             inputpanel <- selectInput(inputName,
+#                                       label = xAxisGroup[i],
+#                                       choices = unique(as.character(data_[[column_name]])),
+#                                       multiple = TRUE,
+#                                       selectize = TRUE,
+#                                       selected = unique(as.character(data_[[column_name]])))
+#         }
+#         
+#         return(conditionalPanel("input.reg_filter_check == 1", inputpanel))
+#     }
+#     
+#     sliders <- lapply(1:length(xAxisGroup), filtering_function)
+#     
+#     # Create a tagList of sliders (this is important)
+#     do.call(tagList, sliders)
+# })
 
 
-reg_reactive <- reactive({
-    data_ <- reactive_data_reg()
-    
-    if(input$reg_filter_check == TRUE){
-        for(i in unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_B, input$reg_sel_three_variables_C))){
-            filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
-            data_ <- data_ %>%
-                filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        }
-        for(i in unique(c(input$reg_sel_three_variables_factor_A, input$reg_sel_three_variables_factor_B, input$reg_sel_three_variables_factor_C))){
-            filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
-            data_ <- data_ %>%
-                filter(get(i) %in% filter_obj)
-        }
-    }
-    data_
-})
+# reactive_data_reg <- reactive({
+#     data_ <- reactive_data_reg()
+#     
+#     if(input$reg_filter_check == TRUE){
+#         for(i in unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_B, input$reg_sel_three_variables_C))){
+#             filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
+#             data_ <- data_ %>%
+#                 filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+#         }
+#         for(i in unique(c(input$reg_sel_three_variables_factor_A, input$reg_sel_three_variables_factor_B, input$reg_sel_three_variables_factor_C))){
+#             filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
+#             data_ <- data_ %>%
+#                 filter(get(i) %in% filter_obj)
+#         }
+#     }
+#     data_
+# })
 
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$reg_reg_table_A <- renderTable({
     req(input$reg_sel_dependent)
-    
+    data_ <- reactive_data_reg()
 
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- data_ %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
     select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-
     variables_A <- intersect(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A), names(data_))
     f_A <- as.formula(paste(input$reg_sel_dependent, paste(variables_A, collapse = " + "), sep = " ~ "))
 
@@ -1599,7 +1602,6 @@ output$reg_reg_table_A <- renderTable({
     coeffs_A <<- reg_A$coefficients
     confint_A <- confint(reg_A, level = 0.9) # for some reason 0.9 will give 0.95 in reality
     
-    # unname(coeffs_A)
     
     df_A <- data.frame("Name" = c(names(coeffs_A)),
                 "Value" = paste0(round(unname(coeffs_A), 2), ifelse(sign(confint_A[, 1]) == sign(confint_A[, 2]), "*", "")),
@@ -1615,7 +1617,7 @@ output$reg_reg_table_A <- renderTable({
 output$reg_r_2_reg_A <- renderUI({
     req(input$reg_sel_dependent)
     
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1640,7 +1642,7 @@ output$reg_r_2_reg_A <- renderUI({
 output$reg_reg_table_B <- renderTable({
     req(input$reg_sel_dependent)
     
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city", input$reg_sel_dependent), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1674,7 +1676,7 @@ output$reg_reg_table_B <- renderTable({
 output$reg_r_2_reg_B <- renderUI({
     req(input$reg_sel_dependent)
     
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1699,7 +1701,7 @@ output$reg_r_2_reg_B <- renderUI({
 output$reg_reg_table_C <- renderTable({
     req(input$reg_sel_dependent)
     
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>% 
         drop_na() %>% 
         filter_all(all_vars(!is.infinite(.)))
@@ -1733,7 +1735,7 @@ output$reg_reg_table_C <- renderTable({
 output$reg_r_2_reg_C <- renderUI({
     req(input$reg_sel_dependent)
     
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1754,7 +1756,7 @@ output$reg_r_2_reg_C <- renderUI({
 })
 
 output$reg_nrows_reg_A <- renderUI({
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1763,7 +1765,7 @@ output$reg_nrows_reg_A <- renderUI({
 
 
 output$reg_nrows_reg_B <- renderUI({
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -1772,7 +1774,7 @@ output$reg_nrows_reg_B <- renderUI({
 
 
 output$reg_nrows_reg_C <- renderUI({
-    data_ <- reg_reactive() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
@@ -2186,69 +2188,69 @@ output$pred_sel_interaction_terms <- renderUI({
 
 
 ### Filter extreme values
-output$pred_filter_check <- renderUI({
-    checkboxInput("pred_filter_check",
-                  strong("Tick this if you would like to filter values"), 
-                  FALSE)
-})
+# output$pred_filter_check <- renderUI({
+#     checkboxInput("pred_filter_check",
+#                   strong("Tick this if you would like to filter values"), 
+#                   FALSE)
+# })
 
 
-# Render the sliders
-output$pred_filters <- renderUI({
-    data_ <- reactive_data_reg() %>% 
-        filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
-        select(unique(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor)))
-    
-    xAxisGroup <- unique(names(data_))
-    
-    # First, create a list of sliders each with a different name
-    filtering_function <- function(i) {
-        inputName <- paste0("pred_filter_", xAxisGroup[i])
-        column_name <- xAxisGroup[i]
-        
-        if(class(data[[column_name]]) != 'factor'){
-            inputpanel <- sliderInput(inputName,
-                                      xAxisGroup[i],
-                                      min=min(data_[column_name], na.rm = T),
-                                      max=max(data_[column_name], na.rm = T),
-                                      value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-        }
-        else{
-            inputpanel <- selectInput(inputName,
-                                      label = xAxisGroup[i],
-                                      choices = unique(as.character(data_[[column_name]])),
-                                      multiple = TRUE,
-                                      selectize = TRUE,
-                                      selected = unique(as.character(data_[[column_name]])))
-        }
-        
-        return(conditionalPanel("input.pred_filter_check == 1", inputpanel))
-    }
-    
-    sliders <- lapply(1:length(xAxisGroup), filtering_function)
-    
-    # Create a tagList of sliders (this is important)
-    do.call(tagList, sliders)
-})
+# # Render the sliders
+# output$pred_filters <- renderUI({
+#     data_ <- reactive_data_reg() %>% 
+#         filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+#         select(unique(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor)))
+#     
+#     xAxisGroup <- unique(names(data_))
+#     
+#     # First, create a list of sliders each with a different name
+#     filtering_function <- function(i) {
+#         inputName <- paste0("pred_filter_", xAxisGroup[i])
+#         column_name <- xAxisGroup[i]
+#         
+#         if(class(data[[column_name]]) != 'factor'){
+#             inputpanel <- sliderInput(inputName,
+#                                       xAxisGroup[i],
+#                                       min=min(data_[column_name], na.rm = T),
+#                                       max=max(data_[column_name], na.rm = T),
+#                                       value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
+#         }
+#         else{
+#             inputpanel <- selectInput(inputName,
+#                                       label = xAxisGroup[i],
+#                                       choices = unique(as.character(data_[[column_name]])),
+#                                       multiple = TRUE,
+#                                       selectize = TRUE,
+#                                       selected = unique(as.character(data_[[column_name]])))
+#         }
+#         
+#         return(conditionalPanel("input.pred_filter_check == 1", inputpanel))
+#     }
+#     
+#     sliders <- lapply(1:length(xAxisGroup), filtering_function)
+#     
+#     # Create a tagList of sliders (this is important)
+#     do.call(tagList, sliders)
+# })
 
 
-pred_reactive <- reactive({
-    data_ <- reactive_data_reg()
-    
-    if(input$pred_filter_check == TRUE){
-        for(i in unique(c(input$pred_sel_three_variables))){
-            filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
-            data_ <- data_ %>%
-                filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        }
-        for(i in unique(c(input$pred_sel_three_variables_factor))){
-            filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
-            data_ <- data_ %>%
-                filter(get(i) %in% filter_obj)
-        }
-    }
-    data_
-})
+# reactive_data_reg <- reactive({
+#     data_ <- reactive_data_reg()
+#     
+#     if(input$pred_filter_check == TRUE){
+#         for(i in unique(c(input$pred_sel_three_variables))){
+#             filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
+#             data_ <- data_ %>%
+#                 filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+#         }
+#         for(i in unique(c(input$pred_sel_three_variables_factor))){
+#             filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
+#             data_ <- data_ %>%
+#                 filter(get(i) %in% filter_obj)
+#         }
+#     }
+#     data_
+# })
 
 
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
@@ -2257,7 +2259,7 @@ output$pred_table <- renderTable({
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
                interaction_terms) %>% 
         drop_na() %>%         
@@ -2295,7 +2297,7 @@ output$pred_r_2_reg <- renderUI({
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
                interaction_terms) %>% 
         drop_na() %>%         
@@ -2327,7 +2329,7 @@ output$pred_best_deals <- renderTable({
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
                interaction_terms) %>% 
         drop_na() %>%         
@@ -2367,7 +2369,7 @@ output$pred_worst_deals <- renderTable({
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
                interaction_terms) %>% 
         drop_na() %>%         
@@ -2405,7 +2407,7 @@ output$pred_plot <- renderPlot({
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
                interaction_terms) %>% 
         drop_na() %>%         
@@ -2461,7 +2463,7 @@ output$pred_plot <- renderPlot({
 
 
 output$pred_nrows <- renderUI({
-    data_ <- pred_reactive() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
+    data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent)) %>%
         drop_na() %>%
         filter_all(all_vars(!is.infinite(.)))
