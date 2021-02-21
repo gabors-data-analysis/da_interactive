@@ -1469,7 +1469,7 @@ shinyServer(function(input, output) {
                         color = color[1],
                         fill = color[1])) +
             geom_point(size = 3,
-                          alpha = 0.3,
+                          alpha = 0.7,
                        show_legend = F,
                        shape = 1) +
             scale_fill_manual(values=c(color[1], color[2], color[3])) +
