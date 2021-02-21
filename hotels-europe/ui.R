@@ -1,9 +1,14 @@
+# Based on code for the textbook "Data Analysis for Business, Economics, and Policy"
+# Cambridge University Press, 2021
+# by Gábor Békés and Gábor Kézdi
+# https://gabors-data-analysis.com/
+# https://github.com/gabors-data-analysis/da_case_studies
 
 ########################################################################
 #
 # CEU "CEU DA Interactive Visualization
-# UI functions DEV
-# Benedek PASZTOR 2021-01-04 - 
+# UI functions
+# Benedek PASZTOR
 #
 ########################################################################
 
@@ -46,12 +51,12 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
         column(10,
             tags$style(HTML(" .tabbable > .nav > li > a[data-value='summary'] {background-color: orange;} .tabbable > .nav > li > a[data-value='plot'] {background-color: red;} .tabbable > .nav > li > a[data-value='table'] {background-color: green;} .tabbable > .nav > li[class=active] > a {background-color: #2432d5;} ")),
             
-            tabsetPanel(type = "pills",
+            tabsetPanel(type = "pills", id = 'tabs',
                         
                         
                         
                       
-                                           tabPanel("Describe data for a city",
+                                           tabPanel("Describe data for a city", value = 'desc',
                                  fluidPage(
                                      fluidRow(
                                          column(3,
@@ -60,10 +65,10 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('desc_sel_date'),
                                                 uiOutput('desc_sel_three_variables'),
                                                 uiOutput('desc_sel_three_variables_factor')),
-                                         column(3,
-                                                h3("Data filtering"),
-                                                uiOutput('desc_filter_check'),
-                                                uiOutput('desc_filters')),
+                                         # column(3,
+                                         #        h3("Data filtering"),
+                                         #        uiOutput('desc_filter_check'),
+                                         #        uiOutput('desc_filters')),
                                          column(3,
                                                 h3("Selected and filtered data summary"),
                                                 fluidRow(
@@ -81,7 +86,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                         plotOutput("desc_histogram_factor"))
                                  )),
                             
-                            tabPanel("Compare two cities",
+                            tabPanel("Compare two cities",  value = 'comp',
                                      fluidPage(
                                          fluidRow(
                                              column(3,
@@ -117,10 +122,11 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                          ),
                                          fluidRow(
                                              h3("Selected and filtered data histograms"),
-                                             plotOutput("comp_histogram"))
+                                             plotOutput("comp_histogram"),
+                                             plotOutput("comp_histogram_factor"))
                                      )),
                                  
-                        tabPanel("Correlation", 
+                        tabPanel("Correlation",  value = 'corr',
 
                                  fluidPage(
                                      fluidRow(
@@ -130,19 +136,21 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                  
                                  
                                  fluidPage(
+                                     fluidRow(),
                                      fluidRow(
                                          column(4, ""),
                                          column(4, 
-                                                htmlOutput("corr_nrows")))),
+                                                ""))),
                                                 # uiOutput('corr_filter_check')))),
                                                 
                                  
                                  fluidPage(
                                      fluidRow(
-                                         h3("Data selection, manipulation and filtering"),
+                                         h3("Data selection and manipulation"),
                                          
                                          column(2,uiOutput('corr_sel_x')),
-                                         column(2, uiOutput('corr_sel_x_ff'))),
+                                         column(2, uiOutput('corr_sel_x_ff')),
+                                         column(2, uiOutput('corr_sel_factor'))),
                                          # column(2, uiOutput('corr_sel_x_filter'))),
                                  
                                      fluidRow(
@@ -150,21 +158,24 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                          column(2, uiOutput('corr_sel_y_ff')))),
                                          # column(2, uiOutput('corr_sel_y_filter')))),
                                  
+                                 
                             
                                  tags$hr(style=paste0("border-color:", line_color)),
                                  
                                 fluidPage(
                                     fluidRow(
-                                        column(12,
-                                    h3("Scatterplot and fitted regression line"),
-                                         uiOutput('corr_regressionline_type'),
-                                        uiOutput('corr_ci'),
-                                    
-                                         htmlOutput("corr_corr"),
-                                         plotOutput("corr_scatterplot"))))),
+                                        h3("Scatterplot and fitted regression line"),
+                                        uiOutput('corr_regressionline_type'),
+                                        uiOutput('corr_ci'),        
+                                        htmlOutput("corr_corr"),
+                                        htmlOutput("corr_nrows"),
+                                        column(6,
+                                        plotOutput("corr_scatterplot")),
+                                        
+                                        column(6, plotOutput("corr_boxplot"))))),
                         
                         
-                        tabPanel("Multivariate regression", 
+                        tabPanel("Multivariate regression",  value = 'reg',
                                  fluidPage(
                                      fluidRow(
                                          column(3,
@@ -207,7 +218,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                         )),
                         tags$hr(style=paste0("border-color:", line_color))),
                         
-                        tabPanel("Comparing regressions",
+                        tabPanel("Comparing regressions", value = 'compreg',
                                  fluidPage(
                                    fluidRow(
                                      column(3,
@@ -242,7 +253,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                             tags$hr(style=paste0("border-color:", line_color)),
                                             tableOutput('compreg_reg_table_C')),
                                             ))),
-                        tabPanel("Prediction",
+                        tabPanel("Prediction", value = 'pred',
                                  fluidPage(
                                      fluidRow(
                                          column(3,
@@ -273,10 +284,10 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                      tableOutput("pred_worst_deals")),
                                               column(4,
                                                      plotOutput('pred_plot'))))),
-                        tabPanel("About the project",
+                        tabPanel("About the project", value = 'about',
                                  uiOutput('about')),
                                            
-                       tabPanel("Source code of the app",
+                       tabPanel("Source code of the app", value = 'source',
                                 uiOutput('source'))
                                            
                                  

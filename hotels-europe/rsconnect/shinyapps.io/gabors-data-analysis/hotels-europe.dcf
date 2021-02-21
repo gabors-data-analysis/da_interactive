@@ -5,8 +5,8 @@ account: gabors-data-analysis
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3573160
-bundleId: 4246644
+bundleId: 4249692
 url: https://gabors-data-analysis.shinyapps.io/hotels-europe/
-when: 1613770159.27743
+when: 1613854240.05056
 asMultiple: FALSE
 asStatic: FALSE
