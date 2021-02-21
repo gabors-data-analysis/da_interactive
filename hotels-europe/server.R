@@ -1906,6 +1906,7 @@ output$reg_reg_table_A <- renderTable({
     # reg_A <<- lm(f_A, data=data_)
     reg_A <- reg_reg_A()
 
+    reg_A
     coeffs_A <<- reg_A$coefficients
     confint_A <- confint(reg_A, level = 0.9) # for some reason 0.9 will give 0.95 in reality
     
@@ -1915,7 +1916,7 @@ output$reg_reg_table_A <- renderTable({
                "CI 95" = c(paste0(as.character(round(confint_A[, 1], digits = 1)), " | ", as.character(round(confint_A[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
 
-    df_A[1, 2] = round(unname(coeffs_A), 2)[1]
+    # df_A[1, 2] = round(unname(coeffs_A), 2)[1]
     
     df_A
 })
@@ -1983,7 +1984,7 @@ output$reg_reg_table_B <- renderTable({
                        "CI 95" = c(paste0(as.character(round(confint_B[, 1]), digits = 2), " | ", as.character(round(confint_B[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df_B[1, 2] = round(unname(coeffs_B), 2)[1]
+    # df_B[1, 2] = round(unname(coeffs_B), 2)[1]
     
     df_B
 })
@@ -2050,7 +2051,7 @@ output$reg_reg_table_C <- renderTable({
                        "CI 95" = c( paste0(as.character(round(confint_C[, 1], digits = 1)), " | ", as.character(round(confint_C[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df_C[1, 2] = round(unname(coeffs_C), 2)[1]
+    # df_C[1, 2] = round(unname(coeffs_C), 2)[1]
     
     df_C
 })
@@ -2299,7 +2300,7 @@ output$compreg_reg_table_A <- renderTable({
                        "CI 95" = c(paste0(as.character(round(confint_A[, 1], digits = 1)), " | ", as.character(round(confint_A[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df_A[1, 2] = round(unname(coeffs_A), 1)[1]
+    # df_A[1, 2] = round(unname(coeffs_A), 1)[1]
     
     df_A
 })
@@ -2385,7 +2386,7 @@ output$compreg_reg_table_B <- renderTable({
                        "CI 95" = c(paste0(as.character(round(confint_B[, 1], digits = 1)), " | ", as.character(round(confint_B[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df_B[1, 2] = round(unname(coeffs_B), 1)[1]
+    # df_B[1, 2] = round(unname(coeffs_B), 1)[1]
     
     df_B
 })
@@ -2469,7 +2470,7 @@ output$compreg_reg_table_C <- renderTable({
                        "CI 95" = c(paste0(as.character(round(confint_C[, 1], digits = 1)), " | ", as.character(round(confint_C[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df_C[1, 2] = round(unname(coeffs_C), 1)[1]
+    # df_C[1, 2] = round(unname(coeffs_C), 1)[1]
     
     df_C
 })
@@ -2709,7 +2710,7 @@ output$pred_table <- renderTable({
                        "CI 95" = c(paste0(as.character(round(confint[, 1], digits = 1)), " | ", as.character(round(confint[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    df[1, 2] = round(unname(coeffs), 2)[1]
+    # df[1, 2] = round(unname(coeffs), 2)[1]
     
     df
 })
