@@ -20,9 +20,10 @@ library(shinythemes)
 library(shinyWidgets)
 source("theme_bg.R")
 
-line_color <- 'black'
+line_color <- '#3a5e8cFF'
 
 background_hex <- "#f2e6d9"
+
 
 # Define UI for application that draws a histogram
 shinyUI(fluidPage( theme = shinytheme("lumen"),
@@ -45,8 +46,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
              h3(""),
             h3("Data filtering:"),
             uiOutput("filter_check"),
-            uiOutput("filters")
-            
+            uiOutput("filters"),
+            style='border-right: 1px solid #3a5e8cFF'            
         ),
         column(10,
             tags$style(HTML(" .tabbable > .nav > li > a[data-value='summary'] {background-color: orange;} .tabbable > .nav > li > a[data-value='plot'] {background-color: red;} .tabbable > .nav > li > a[data-value='table'] {background-color: green;} .tabbable > .nav > li[class=active] > a {background-color: #2432d5;} ")),
@@ -75,7 +76,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                     htmlOutput("desc_nrows"),
                                                     tableOutput("desc_summary"),
                                                 tableOutput("desc_summary_factor"),
-                                                style='margin-bottom:30px;border:1px solid; padding: 10px;'))
+                                                style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
                                      ),
                                      fluidRow(
                                          tags$hr(style=paste0("border-color:", line_color)), 
@@ -106,7 +107,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                         htmlOutput("comp_nrows_1"),
                                                         tableOutput("comp_summary_1"),
                                                              tableOutput("comp_summary_factor_1"),
-                                                             style='margin-bottom:30px;border:1px solid; padding: 10px;')),
+                                                             style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;')),
                                              
                                              column(3,
                                                     h3("Selected and filtered data summary"), 
@@ -115,7 +116,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                         htmlOutput("comp_nrows_2"),
                                                         tableOutput("comp_summary_2"),
                                                      tableOutput("comp_summary_factor_2"),
-                                                     style='margin-bottom:30px;border:1px solid; padding: 10px;'))
+                                                     style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
                                          ),
                                          fluidRow(
                                              tags$hr(style=paste0("border-color:", line_color)), 
@@ -154,7 +155,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                          # column(2, uiOutput('corr_sel_x_filter'))),
                                  
                                      fluidRow(
-                                         column(2, uiOutput('corr_sel_y')),
+                                         column(2, uiOutput('corr_sel_y'),
+                                                htmlOutput("corr_nrows")),
                                          column(2, uiOutput('corr_sel_y_ff')))),
                                          # column(2, uiOutput('corr_sel_y_filter')))),
                                  
@@ -168,7 +170,6 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                         uiOutput('corr_regressionline_type'),
                                         uiOutput('corr_ci'),        
                                         htmlOutput("corr_corr"),
-                                        htmlOutput("corr_nrows"),
                                         column(6,
                                         plotOutput("corr_scatterplot")),
                                         
@@ -277,12 +278,11 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 "Linear regression (OLS). Values that are statistically different from zero are denoted by a star.")),
                                      tags$hr(style=paste0("border-color:", line_color)),
                                      
-                                                                          fluidRow(column(3,
+                                                                          fluidRow(column(12,
                                                      h3("Best deals"),
                                                      tableOutput("pred_best_deals"),
                                                      h3("Worst deals"),
-                                                     tableOutput("pred_worst_deals")),
-                                              column(4,
+                                                     tableOutput("pred_worst_deals"),
                                                      plotOutput('pred_plot'))))),
                         tabPanel("About the project", value = 'about',
                                  uiOutput('about')),
