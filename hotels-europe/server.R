@@ -57,9 +57,12 @@ theme_gg <- theme_bg
 
 Nh_basing <- function(data_){
     if('Nh' %in% names(data_)){
-        factor_0 <- (tail(arrange(data_ %>% group_by(Nh) %>% 
-                                      summarise(n = n()) %>% 
-                                      mutate(Nh = as.character(Nh)), n, desc = T), 1)['Nh'])[[1]]
+        factor_0 <- (data_ %>% 
+                       group_by(Nh) %>% 
+                       dplyr::summarise(n = n()) %>% 
+                       mutate(Nh = as.character(Nh)) %>% 
+                       arrange(n) %>% 
+                       tail(1)['Nh'])[[1]]
         
         data_ <- data_ %>% mutate(Nh = relevel(Nh, factor_0))
         return(data_)
@@ -69,16 +72,35 @@ Nh_basing <- function(data_){
 
 
 
-
-
-
 split_interaction_terms <- function(inter_){
     ret <- strsplit(inter_, "\\*")[[1]]
     return(ret)
 }
 
+check_if_no_selection <- function(list_of_inputs){
+  k <- 0
+  for(i in list_of_inputs){
+    if(is.null(i) | length(i) == 0){
+      k <- k + 1
+    }
+  }
+  if(k == length(list_of_inputs)){
+    return(FALSE)
+  }
+  else{
+    return(TRUE)
+  }
+}
 
-shinyServer(function(input, output) {
+
+selection_check <- function(list_of_inputs){
+  return(
+    validate(
+      need(check_if_no_selection(list_of_inputs), "Please select at least one RHS variable")
+    ))
+}
+
+shinyServer(function(input, output, session) {
     data <- read.csv(paste0('data/hotels.csv')) %>% 
         mutate(date = as.factor(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"))) %>%
         select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat, 
@@ -117,7 +139,7 @@ shinyServer(function(input, output) {
     data_reg <- data %>% mutate(ln_price = log(price),
                                 ln_distance = log(distance),
                                 `ln_N_rating_review` = log(`N_rating_review`)) %>%
-        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city,rating) %>% 
+        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city,rating, city_actual) %>% 
         drop_na() %>% 
         filter_all(all_vars(!is.infinite(.)))
         
@@ -1810,7 +1832,9 @@ output$reg_sel_interaction_terms_C <- renderUI({
 
 
 reg_reg_A <- reactive({
+
     interaction_terms <- split_interaction_terms(input$reg_sel_interaction_terms_A)
+    
     
     data_ <- reactive_data_reg() %>%
         filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
@@ -1819,21 +1843,26 @@ reg_reg_A <- reactive({
         drop_na() %>%         
         filter_all(all_vars(!is.infinite(.)))
     
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$reg_sel_three_variables_A, paste0(interaction_terms, collapse = " * "), input$reg_sel_three_variables_factor_A)
-    f <- as.formula(paste(input$reg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
+    variables <- c(input$reg_sel_three_variables_A, interaction_terms, input$reg_sel_three_variables_factor_A)
+    
+    f <- as.formula(paste(input$reg_sel_dependent, paste0(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
     
     reg
     
 })
-
-
 
 reg_reg_B <- reactive({
     interaction_terms <- split_interaction_terms(input$reg_sel_interaction_terms_B)
@@ -1845,12 +1874,18 @@ reg_reg_B <- reactive({
         drop_na() %>%         
         filter_all(all_vars(!is.infinite(.)))
     
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$reg_sel_three_variables_B, paste0(interaction_terms, collapse = " * "), input$reg_sel_three_variables_factor_B)
+    variables <- c(input$reg_sel_three_variables_B, interaction_terms, input$reg_sel_three_variables_factor_B)
     f <- as.formula(paste(input$reg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
@@ -1871,13 +1906,19 @@ reg_reg_C <- reactive({
         drop_na() %>%         
         filter_all(all_vars(!is.infinite(.)))
     
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$reg_sel_three_variables_C, paste0(interaction_terms, collapse = " * "), input$reg_sel_three_variables_factor_C)
-    f <- as.formula(paste(input$reg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
+    variables <- c(input$reg_sel_three_variables_C, interaction_terms, input$reg_sel_three_variables_factor_C)
+    f <- as.formula(paste(input$reg_sel_dependent, paste0(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
     
@@ -1889,24 +1930,11 @@ reg_reg_C <- reactive({
 output$reg_reg_table_A <- renderTable({
     loading(input$reg_sel_city)
     
-    # data_ <- reactive_data_reg()
-    # 
-    # data_ <- data_ %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    # select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # variables_A <- intersect(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A), names(data_))
-    # f_A <- as.formula(paste(input$reg_sel_dependent, paste(variables_A, collapse = " + "), sep = " ~ "))
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # reg_A <<- lm(f_A, data=data_)
+    selection_check(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
+                         split_interaction_terms(input$reg_sel_interaction_terms_A)))
+    
     reg_A <- reg_reg_A()
 
-    reg_A
     coeffs_A <<- reg_A$coefficients
     confint_A <- confint(reg_A, level = 0.9) # for some reason 0.9 will give 0.95 in reality
     
@@ -1927,6 +1955,8 @@ output$reg_r_2_reg_A <- renderUI({
     
     req(input$reg_sel_dependent)
     
+    selection_check(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
+                         split_interaction_terms(input$reg_sel_interaction_terms_A)))
     # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
     #     select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
     #     drop_na() %>%
@@ -1956,6 +1986,9 @@ output$reg_reg_table_B <- renderTable({
     loading(input$reg_sel_city)
     
     req(input$reg_sel_dependent)
+    
+    selection_check(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
+                         split_interaction_terms(input$reg_sel_interaction_terms_B)))
     
     # data_ <- reactive_data_reg() %>%
     #     filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
@@ -1994,6 +2027,9 @@ output$reg_reg_table_B <- renderTable({
 output$reg_r_2_reg_B <- renderUI({
     loading(input$reg_sel_city)
     
+    selection_check(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
+                       split_interaction_terms(input$reg_sel_interaction_terms_B)))
+  
     # req(input$reg_sel_dependent)
     # 
     # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
@@ -2022,6 +2058,10 @@ output$reg_r_2_reg_B <- renderUI({
 output$reg_reg_table_C <- renderTable({
     loading(input$reg_sel_city)
     
+  
+    selection_check(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
+                       split_interaction_terms(input$reg_sel_interaction_terms_C)))
+  
     # req(input$reg_sel_dependent)
     # 
     # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
@@ -2061,6 +2101,9 @@ output$reg_reg_table_C <- renderTable({
 output$reg_r_2_reg_C <- renderUI({
     loading(input$reg_sel_city)
     
+    selection_check(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
+                       split_interaction_terms(input$reg_sel_interaction_terms_C)))
+  
     # req(input$reg_sel_dependent)
     # 
     # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
@@ -2133,6 +2176,8 @@ output$compreg_sel_three_variables <-renderUI({
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
+    
+    
 })
 
 
@@ -2209,9 +2254,17 @@ compreg_reg_A <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
+    
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$compreg_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$compreg_sel_three_variables_factor)
+    variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
@@ -2233,9 +2286,16 @@ compreg_reg_B <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$compreg_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$compreg_sel_three_variables_factor)
+    variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
@@ -2256,9 +2316,16 @@ compreg_reg_C <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$compreg_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$compreg_sel_three_variables_factor)
+    variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <- lm(f, data=data_)
@@ -2272,7 +2339,9 @@ compreg_reg_C <- reactive({
 output$compreg_reg_table_A <- renderTable({
     loading(input$compreg_sel_dependent)
     
-
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
     # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
     #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
     #     drop_na() %>%
@@ -2309,6 +2378,9 @@ output$compreg_reg_table_A <- renderTable({
 output$compreg_r_2_reg_A <- renderUI({
     loading(input$compreg_sel_dependent)
     
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
     # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
     #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
     #     drop_na() %>%
@@ -2374,6 +2446,11 @@ output$compreg_reg_table_B <- renderTable({
     # 
     # 
     # reg_B <<- lm(f_B, data=data_)
+    
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
+  
     reg_B <- compreg_reg_B()
     
     coeffs_B <<- reg_B$coefficients
@@ -2395,6 +2472,9 @@ output$compreg_reg_table_B <- renderTable({
 output$compreg_r_2_reg_B <- renderUI({
     loading(input$compreg_sel_dependent)
     
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
     # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
     #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
     #     drop_na() %>%
@@ -2458,6 +2538,9 @@ output$compreg_reg_table_C <- renderTable({
     # 
     # reg_C <<- lm(f_C, data=data_)
     
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
     reg_C <- compreg_reg_C()
     
     coeffs_C <<- reg_C$coefficients
@@ -2480,6 +2563,10 @@ output$compreg_reg_table_C <- renderTable({
 
 output$compreg_r_2_reg_C <- renderUI({
     loading(input$compreg_sel_dependent)
+  
+    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  
     
     # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
     #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
@@ -2681,6 +2768,9 @@ output$pred_sel_interaction_terms <- renderUI({
 output$pred_table <- renderTable({
     loading(input$pred_sel_city)
 
+    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+                       split_interaction_terms(input$pred_sel_interaction_terms)))
+  
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
     data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
@@ -2694,7 +2784,14 @@ output$pred_table <- renderTable({
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$pred_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$pred_sel_three_variables_factor)
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
+    variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     
@@ -2719,7 +2816,10 @@ output$pred_table <- renderTable({
 output$pred_r_2_reg <- renderUI({
     loading(input$pred_sel_city)
 
+    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+                       split_interaction_terms(input$pred_sel_interaction_terms)))
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
+    
     
     data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent),
@@ -2732,13 +2832,17 @@ output$pred_r_2_reg <- renderUI({
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$pred_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$pred_sel_three_variables_factor)
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
+    
+    variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
-    
-    
-    variables <- intersect(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor), names(data_))
-    f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <<- lm(f, data=data_)
     
@@ -2750,6 +2854,8 @@ output$pred_r_2_reg <- renderUI({
 
 output$pred_best_deals <- renderTable({
     loading(input$pred_sel_city)
+    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+                       split_interaction_terms(input$pred_sel_interaction_terms)))
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
@@ -2760,18 +2866,23 @@ output$pred_best_deals <- renderTable({
         filter_all(all_vars(!is.infinite(.)))
     
     
+    
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$pred_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$pred_sel_three_variables_factor)
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
+    
+    variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     
-    
-    
-    variables <- intersect(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor), names(data_))
-    f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <<- lm(f, data=data_)
     
@@ -2781,7 +2892,7 @@ output$pred_best_deals <- renderTable({
     
     data_$bestdeals <- ifelse(data_$resid %in% tail(sort(data_$resid, decreasing=TRUE),5),TRUE,FALSE)
     
-    data_ %>% filter(bestdeals == T) %>% select(-bestdeals)
+    data_ %>% filter(bestdeals == T) %>% select(-bestdeals) %>% dplyr::arrange(resid)
 
 })
 
@@ -2790,6 +2901,9 @@ output$pred_best_deals <- renderTable({
 output$pred_worst_deals <- renderTable({
     loading(input$pred_sel_city)    
     
+    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+                       split_interaction_terms(input$pred_sel_interaction_terms)))  
+  
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
     data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
@@ -2801,15 +2915,25 @@ output$pred_worst_deals <- renderTable({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
+    
+    
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$pred_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$pred_sel_three_variables_factor)
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
+    
+    variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     
     
-    variables <- intersect(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor), names(data_))
-    f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
+    # variables <- intersect(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor), names(data_))
+    # f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <<- lm(f, data=data_)
     
@@ -2819,7 +2943,7 @@ output$pred_worst_deals <- renderTable({
     
     data_$worstdeals <- ifelse(data_$resid %in% tail(sort(data_$resid, decreasing=FALSE),5),TRUE,FALSE)
     
-    data_ %>% filter(worstdeals == T) %>% select(-worstdeals)
+    data_ %>% filter(worstdeals == T) %>% select(-worstdeals)  %>% dplyr::arrange(desc(resid))
     
 })
 
@@ -2828,6 +2952,9 @@ output$pred_worst_deals <- renderTable({
 output$pred_plot <- renderPlot({
     loading(input$pred_sel_city)
     
+    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+                       split_interaction_terms(input$pred_sel_interaction_terms)))
+  
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
     data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
@@ -2841,7 +2968,15 @@ output$pred_plot <- renderPlot({
     
     data_ <- Nh_basing(data_)
     
-    variables <- c(input$pred_sel_three_variables, paste0(interaction_terms, collapse = " * "), input$pred_sel_three_variables_factor)
+    if(length(interaction_terms) == 0){
+      interaction_terms <- c()
+    }
+    else{
+      interaction_terms <- paste0(interaction_terms, collapse = " * ")
+    }
+    
+    
+    variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     
@@ -2862,23 +2997,33 @@ output$pred_plot <- renderPlot({
     
     p <- data_ %>% ggplot(aes(x = prediction,
                          y = get(input$pred_sel_dependent))) +
-        geom_point(aes(color = deal_type),
-                   size = 3,
+        geom_point(aes(color = deal_type,
+                       fill = deal_type,
+                       size = deal_type),
                    alpha = 0.9,
+                   # size = 3,
                    show_legend = T,
                    shape = 1) +
         geom_smooth(method = "lm", formula = y ~ x, color = color[4], se = F) +
-        scale_fill_manual(values=c(color[1], color[2], color[3])) +
+      # scale_alpha_manual(values=c(0.3, 1, 1)) +
+      
         # scale_color_manual(values = c(color[1], color[2], color[3])) +
-        theme(aspect.ratio = 0.8) +
         ggtitle(paste("Predictions vs actuals")) +
         ylab(input$pred_sel_dependent) +
         theme_gg() +
         theme(legend.position = "right",
               legend.text = element_text(size = 18),
               legend.title = element_blank()) +
-        theme(aspect.ratio = 0.8) +
-        theme(plot.background=element_rect(fill=background_hex))
+      theme(aspect.ratio = 1) +
+      
+        theme(plot.background=element_rect(fill=background_hex)) +
+      scale_fill_manual(values=c("Amongst regular deals" = background_hex, "Amongst best deals" =  color[2], 
+                                 "Amongst worst deals" = color[3])) +
+      scale_color_manual(values=c("Amongst regular deals" = color[1], "Amongst best deals" =  color[2], 
+                                  "Amongst worst deals" = color[3])) +
+      scale_size_manual(values = c("Amongst regular deals" = 2, "Amongst best deals" =  4,
+      "Amongst worst deals" = 4))
+      
     
     return(p)
     
