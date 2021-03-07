@@ -32,14 +32,6 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                   
     # Application title
     titlePanel("Gabors Interactive Data Analysis"),
-
-    # Sidebar with a slider input for number of bins 
-    # sidebarLayout(
-        # sidebarPanel(
-        #     width = 1
-        #     
-        #     
-        # )
     
     fluidRow(
         column(2,
@@ -47,6 +39,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
             h3("Data filtering:"),
             uiOutput("filter_check"),
             uiOutput("filters"),
+            tags$hr(style=paste0("border-color:", line_color)), 
+            uiOutput("tab_description"),
             style='border-right: 1px solid #3a5e8cFF'            
         ),
         column(10,
@@ -75,17 +69,20 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 fluidRow(
                                                     htmlOutput("desc_nrows"),
                                                     tableOutput("desc_summary"),
-                                                tableOutput("desc_summary_factor"),
-                                                style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
+                                                tableOutput("desc_summary_factor")))
+                                                # style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
                                      ),
                                      fluidRow(
-                                         tags$hr(style=paste0("border-color:", line_color)), 
+                                         tags$hr(style=paste0("border-color:", line_color)),
                                      ),
                                     fluidRow(
                                         h3("Selected and filtered data histograms"),
                                          plotOutput("desc_histogram"),
-                                        plotOutput("desc_histogram_factor"))
-                                 )),
+                                        plotOutput("desc_histogram_factor"),
+                                        plotOutput("desc_histogram_factor_district", width = "100%", height = "700px")
+                                    )
+                                 )
+                                 ),
                             
                             tabPanel("Compare two cities",  value = 'comp',
                                      fluidPage(
@@ -106,8 +103,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                     fluidRow(
                                                         htmlOutput("comp_nrows_1"),
                                                         tableOutput("comp_summary_1"),
-                                                             tableOutput("comp_summary_factor_1"),
-                                                             style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;')),
+                                                             tableOutput("comp_summary_factor_1"))),
+                                                             # style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;')),
                                              
                                              column(3,
                                                     h3("Selected and filtered data summary"), 
@@ -115,8 +112,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                     fluidRow(
                                                         htmlOutput("comp_nrows_2"),
                                                         tableOutput("comp_summary_2"),
-                                                     tableOutput("comp_summary_factor_2"),
-                                                     style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
+                                                     tableOutput("comp_summary_factor_2")))
+                                                     # style='margin-bottom:30px;border:1px solid  #3a5e8cFF; padding: 10px;'))
                                          ),
                                          fluidRow(
                                              tags$hr(style=paste0("border-color:", line_color)), 
@@ -127,7 +124,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                              plotOutput("comp_histogram_factor"))
                                      )),
                                  
-                        tabPanel("Correlation",  value = 'corr',
+                        tabPanel("Associations",  value = 'corr',
 
                                  fluidPage(
                                      fluidRow(
@@ -158,10 +155,7 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                          column(2, uiOutput('corr_sel_y'),
                                                 htmlOutput("corr_nrows")),
                                          column(2, uiOutput('corr_sel_y_ff')))),
-                                         # column(2, uiOutput('corr_sel_y_filter')))),
-                                 
-                                 
-                            
+                                
                                  tags$hr(style=paste0("border-color:", line_color)),
                                  
                                 fluidPage(
@@ -169,11 +163,11 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                         h3("Scatterplot and fitted regression line"),
                                         uiOutput('corr_regressionline_type'),
                                         uiOutput('corr_ci'),        
+                                        plotOutput("corr_scatterplot"),
                                         htmlOutput("corr_corr"),
-                                        column(6,
-                                        plotOutput("corr_scatterplot")),
-                                        
-                                        column(6, plotOutput("corr_boxplot"))))),
+                                        plotOutput("corr_boxplot"),
+                                        htmlOutput("corr_corr_factor")
+                                    ))),
                         
                         
                         tabPanel("Multivariate regression",  value = 'reg',
@@ -184,8 +178,6 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                                                 uiOutput('reg_sel_city'),
                                                 uiOutput('reg_sel_date'),
                                                uiOutput('reg_sel_dependent')),
-                                               # uiOutput('reg_filter_check'),
-                                               # uiOutput('reg_filters')),
                                          
                                          column(3,
                                                 h3("Regression A"),

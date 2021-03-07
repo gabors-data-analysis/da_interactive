@@ -25,6 +25,7 @@ library(stringr)
 library(shinyWidgets)
 library(shinyAce)
 library(plyr)
+library(stringi)
 
 
 mean_na <- function(x) mean(x, na.rm = TRUE)
@@ -34,6 +35,7 @@ sd_na <- function(x) sd(x, na.rm = TRUE)
 
 
 roundUp <- function(x,m) m*ceiling(x / m)
+rsq <- function (x, y) cor(x, y) ^ 2
 
 
 roundUp_n <- function(x,to=10)
@@ -55,16 +57,16 @@ theme_gg <- theme_bg
 
 
 
-Nh_basing <- function(data_){
-    if('Nh' %in% names(data_)){
+District_basing <- function(data_){
+    if('District' %in% names(data_)){
         factor_0 <- (data_ %>% 
-                       group_by(Nh) %>% 
+                       group_by(District) %>% 
                        dplyr::summarise(n = n()) %>% 
-                       mutate(Nh = as.character(Nh)) %>% 
+                       mutate(District = as.character(District)) %>% 
                        arrange(n) %>% 
-                       tail(1)['Nh'])[[1]]
+                       tail(1)['District'])[[1]]
         
-        data_ <- data_ %>% mutate(Nh = relevel(Nh, factor_0))
+        data_ <- data_ %>% mutate(District = relevel(District, factor_0))
         return(data_)
     }
     else{return(data_)}
@@ -92,25 +94,37 @@ check_if_no_selection <- function(list_of_inputs){
   }
 }
 
-
 selection_check <- function(list_of_inputs){
+  return(
+    validate(
+      need(check_if_no_selection(list_of_inputs), "Please double check your filtering options.")
+    ))
+} 
+
+selection_check_reg <- function(list_of_inputs){
   return(
     validate(
       need(check_if_no_selection(list_of_inputs), "Please select at least one RHS variable")
     ))
 }
 
+
 shinyServer(function(input, output, session) {
-    data <- read.csv(paste0('data/hotels.csv')) %>% 
-        mutate(date = as.factor(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"))) %>%
+    data <- read.csv(paste0('data/hotels.csv'), encoding = "UTF-8") %>% 
+      mutate(weekend_str = ifelse(weekend == 1, '_WEEKEND', '_WEEKDAY')) %>% 
+      # mutate(neighbourhood = as.factor(enc2utf8(as.character(neighbourhood)))) %>% 
+        mutate(date = as.factor(paste0(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"), weekend_str))) %>%
+        mutate(date = factor(as.character(date), sort(levels(date)))) %>% 
+      # mutate(city_actual_2 = ifelse(city_actual  == TRUE, "Yes", "No")) %>%
+      # mutate(city_actual = city_actual_2) %>% 
         select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat, 
                accommodation_type, city_actual, neighbourhood) %>%
         filter(stars >= 2) %>% 
         mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
                                            "Apartment",
-                                           ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Pension"),
+                                           ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Inn", "Apart-hotel", "Pension"),
                                                   "Guest House",
-                                                  ifelse(accommodation_type %in% c("Hotel", "Inn", "Apart-hotel"),
+                                                  ifelse(accommodation_type %in% c("Hotel"),
                                                          "Hotel",
                                                   "Other"))),
                accommodation_type = as.factor(accommodation_type_2)) %>%
@@ -125,29 +139,43 @@ shinyServer(function(input, output, session) {
                                   ifelse(offer_cat %in% c("15-50%"), "Discount",
                                                           "Sale"))) %>%
         mutate(offer_cat = as.factor(offer_cat)) %>%
-        mutate(city_actual = relevel(as.factor(ifelse(as.character(city_actual) == as.character(city), "True", "False")), "True")) %>%
+        mutate(city_actual = relevel(as.factor(ifelse(as.character(city_actual) == as.character(city), "Yes", "No")), "Yes")) %>%
         mutate(offer_cat = relevel(offer_cat, "Regular (base)"),
                accommodation_type = relevel(accommodation_type, "Hotel"),
                stars = as.factor(relevel(stars, 3))) %>% 
         plyr::rename(c("rating_reviewcount" = "N_rating_review",
                        "offer_cat" = "Offer_Cat",
-                       "neighbourhood" = "Nh",
-                       "accommodation_type" = "acc_")) %>%
+                       "neighbourhood" = "District",
+                       "accommodation_type" = "Type")) %>%
         select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
-    
     
     data_reg <- data %>% mutate(ln_price = log(price),
                                 ln_distance = log(distance),
                                 `ln_N_rating_review` = log(`N_rating_review`)) %>%
-        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, acc_, city_actual, Nh, city,rating, city_actual) %>% 
-        drop_na() %>% 
-        filter_all(all_vars(!is.infinite(.)))
-        
+        select(date, price, ln_price, N_rating_review, ln_N_rating_review, distance, ln_distance, distance_alter, Offer_Cat, stars, Type, city_actual, District, city,rating, city_actual) %>% 
+      mutate(ln_price = round(ifelse(ln_price %in% c(-Inf, Inf), 0, ifelse(is.na(ln_price), 0, ln_price)), digits = 1),
+             ln_distance = round(ifelse(ln_distance %in% c(-Inf, Inf), 0, ifelse(is.na(ln_distance), 0, ln_distance)), digits = 1),
+             ln_N_rating_review = round(ifelse(ln_N_rating_review %in% c(-Inf, Inf), 0, ifelse(is.na(ln_N_rating_review), 0, ln_N_rating_review)), digits = 1)) 
     
+
+    # data %>% filter(city == 'Budapest')
+    # x <- lapply(codepages, function(enc) try(read.table("data/hotels_check.csv",
+    #                                                     fileEncoding=enc,
+    #                                                     nrows=3, header=TRUE, sep=","))) # you get lots of errors/warning here
     
-    ############# BASE FILTERING ################
+    dataframe_length_check <- function(){
+      return(
+        validate(
+          need(dim(reactive_data())[1] > 0, "Please double check your filtering options.")
+        ))
+    } 
     
-    output$whichtabisopened <- renderText({input$tabs})
+    dataframe_length_check_reg <- function(){
+      return(
+        validate(
+          need(dim(reactive_data_reg())[1] > 1, "Please double check your filtering options.")
+        ))
+    } 
     
     
     ### Filter extreme values
@@ -157,10 +185,10 @@ shinyServer(function(input, output, session) {
                       FALSE)
     })
     
-    loading <- function(validation_var){
+    loading <- function(validation_vars){
         return(
         validate(
-            need(validation_var != "", "Loading ...") # display custom message in need
+            need(check_if_no_selection(validation_vars) > 0, "Loading ...") # display custom message in need
         ))
     }
     
@@ -227,7 +255,7 @@ shinyServer(function(input, output, session) {
                 
                 inputpanel <- pickerInput(inputName,
                                           label = xAxisGroup[i],
-                                          choices = unique(as.character(data_[[column_name]])),
+                                          choices = sort(unique(as.character(data_[[column_name]]))),
                                           multiple = TRUE,
                                           selected = unique(as.character(data_[[column_name]])))
             }
@@ -253,23 +281,22 @@ shinyServer(function(input, output, session) {
         
         data_ <- data
         
-        if(input$filter_check == TRUE){
-            for(i in names_to_filter){
-                if(class(data[[i]]) != 'factor'){
-                    filter_obj <- eval(parse(text = paste0("input$filter_", i)))
-                    data_ <- data_ %>%
-                        filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-                }
-                else{
-                    filter_obj <- eval(parse(text = paste0("input$filter_", i)))
-                    data_ <- data_ %>%
-                        filter(get(i) %in% filter_obj)
-                }
+        for(i in names_to_filter){
+            if(class(data[[i]]) != 'factor'){
+                filter_obj <- eval(parse(text = paste0("input$filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
+            }
+            else{
+                filter_obj <- eval(parse(text = paste0("input$filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
             }
         }
+    
         data_$stars <- ordered(data_$stars, levels = c("2", "2.5", "3", "3.5", "4", "4.5", "5") )
         
-        data_
+        data_ %>% drop_na()
     })
     
     
@@ -283,23 +310,27 @@ shinyServer(function(input, output, session) {
         data_ <- data_reg
         
         
-        if(input$filter_check == TRUE){
-            for(i in names_to_filter){
-                if(class(data_[[i]]) != 'factor'){
-                    filter_obj <- eval(parse(text = paste0("input$filter_", i)))
-                    data_ <- data_ %>%
-                        filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-                }
-                else{
-                    filter_obj <- eval(parse(text = paste0("input$filter_", i)))
-                    data_ <- data_ %>%
-                        filter(get(i) %in% filter_obj)
-                }
+        for(i in names_to_filter){
+            if(class(data_[[i]]) != 'factor'){
+                filter_obj <- eval(parse(text = paste0("input$filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) >= filter_obj[1]) %>% 
+                  filter(get(i) <= filter_obj[2])
+            }
+            else{
+                filter_obj <- eval(parse(text = paste0("input$filter_", i)))
+                data_ <- data_ %>%
+                    filter(get(i) %in% filter_obj)
             }
         }
-
-
-        data_
+        
+        for(i in c("price", "distance")){
+          if(length(unique(data_[[i]])) == 1){
+            data_[i] <- NA
+          }
+        }
+        
+        data_ %>% drop_na()
     })
     
     
@@ -319,10 +350,10 @@ shinyServer(function(input, output, session) {
     output$desc_sel_date <- renderUI({
             selectInput(inputId = "desc_sel_date",
                         label = "Select a date:",
-                        choices = unique(data$date),
+                        choices = sort(unique(data$date)),
                         multiple = FALSE,
                         selectize = TRUE,
-                        selected = c("2017-11-01"))
+                        selected = c("2017-11-11_WEEKDAY"))
     })
 
 
@@ -331,7 +362,7 @@ shinyServer(function(input, output, session) {
         selectable_names <- setdiff(names(data)[ifelse(sapply(data, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  "weekend", "holiday", "city", "country", "offer", "ratingta", "ratingta_count"))
         
         selectizeInput(inputId = "desc_sel_three_variables",
-                    label = "Select numeric variables:",
+                    label = "Select quantitative variables:",
                     choices = selectable_names,
                     multiple = TRUE,
                     selected = c("price", "distance"),
@@ -351,53 +382,7 @@ shinyServer(function(input, output, session) {
                     options = list(maxItems = 3))
     })
 
-    ### Filter extreme values
-    output$desc_filter_check <- renderUI({
-        checkboxInput("desc_filter_check",
-                      strong("Tick this if you would like to filter values"), 
-                      FALSE)
-    })
     
-    
-    # Render the sliders
-    output$desc_filters <- renderUI({
-        
-        
-        data_ <- reactive_data() %>% 
-            filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
-            select(c(input$desc_sel_three_variables, input$desc_sel_three_variables_factor))
-        
-        xAxisGroup <- unique(names(data_))
-        
-        # First, create a list of sliders each with a different name
-        filtering_function <- function(i) {
-            inputName <- paste0("desc_filter_", xAxisGroup[i])
-            column_name <- xAxisGroup[i]
-            
-            if(class(data[[column_name]]) != 'factor'){
-                inputpanel <- sliderInput(inputName,
-                                          xAxisGroup[i],
-                                          min=min(data_[column_name], na.rm = T),
-                                          max=max(data_[column_name], na.rm = T),
-                                          value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-            }
-            else{
-                inputpanel <- selectInput(inputName,
-                            label = xAxisGroup[i],
-                            choices = unique(as.character(data_[[column_name]])),
-                            multiple = TRUE,
-                            selectize = TRUE,
-                            selected = unique(as.character(data_[[column_name]])))
-            }
-            
-            return(conditionalPanel(condition = "input.desc_filter_check == 1", inputpanel))
-        }
-        
-        sliders <- lapply(1:length(xAxisGroup), filtering_function)
-        
-        # Create a tagList of sliders (this is important)
-        do.call(tagList, sliders)
-    })
     
 
     desc_plotting_function <- function(thisID, data_, data_c){
@@ -429,18 +414,10 @@ shinyServer(function(input, output, session) {
         }
         
         else{
-            
-            
-            # data__ <- data %>% filter(city == 'Vienna', date == '2017-11-01')
-            # thisID <- 'distance'
-            #
-            # data_c <- data__
+    
             condition_ <- max(data_c %>% select(thisID)) >= 500
             bins <- 20
             is_it_rating <- thisID == 'rating'
-            
-            
-            
             
             
             if(is_it_rating == T){
@@ -515,31 +492,6 @@ shinyServer(function(input, output, session) {
             
             q <- ggplot_build(p) 
             
-            # thisID <- 'distance'
-            # q$data[[1]] <- q$data[[1]] %>% mutate_all(~replace(., is.na(.), 0))
-            # # q$data[[1]] <- q$data[[1]][order(q$data[[1]]$xmin),]
-            # # q$data[[1]]$xmin <- replace(sort(q$data[[1]]$xmin, na.last = T), 1, 0)
-            # q$layout$panel_params[[1]]$x$breaks <- q$layout$panel_params[[1]]$x$breaks[!is.na(q$layout$panel_params[[1]]$x$breaks)]
-            # 
-            # q$layout$panel_params[[1]]$x$breaks <- sort(q$data[[1]]$xmin)[c(T, T)]
-            # q$layout$panel_params[[1]]$x$breaks <- replace(q$layout$panel_params[[1]]$x$breaks, 1, 0)
-            # 
-            # q$layout$panel_params[[1]]$x$breaks <- plyr::round_any(q$layout$panel_params[[1]]$x$breaks,ifelse(mean(q$layout$panel_params[[1]]$x$breaks) > 100, 100,
-            #                                                                                                             ifelse(mean(q$layout$panel_params[[1]]$x$breaks) > 10, 10,
-            #                                                                                                                    1)))   
-            # 
-            # q$layout$panel_params[[1]]$x$breaks <- round(q$layout$panel_params[[1]]$x$breaks, digits = ifelse(mean(q$layout$panel_params[[1]]$x$breaks, na.rm = T) > 100, 0,
-            #                                                                                                   ifelse(mean(q$layout$panel_params[[1]]$x$breaks, na.rm = T) > 10, 1,
-            #                                                                                                          ifelse(q$layout$panel_params[[1]]$x$breaks == 0, 0, 2))))
-
-
-            
-            #
-            # q$layout$panel_params[[1]]$x$breaks[is.na(q$layout$panel_params[[1]]$x$breaks)] <- max(q$layout$panel_params[[1]]$x$breaks, na.rm = T)
-            # 
-            # q$layout$panel_params[[1]]$x$breaks <- round(q$data[[1]][['xmin']][c(T, T)], digits = ifelse(mean(q$layout$panel_params[[1]]$x$breaks) > 100, 0,
-            #                                                                                              ifelse(mean(q$layout$panel_params[[1]]$x$breaks) > 10, 1, 2)))
-
             p <- ggplot_gtable(q)
         }
         
@@ -547,33 +499,14 @@ shinyServer(function(input, output, session) {
     }
     
     output$desc_histogram <- renderPlot({
-        loading(input$desc_sel_city)
-        # 
+        loading(c(input$desc_sel_city, input$desc_sel_date))
+        dataframe_length_check()
+
+      
+        selection_check(c(input$desc_sel_three_variables))
         
         data_ <- reactive_data()
         
-        # if(input$desc_filter_check == TRUE){
-        #     for(i in input$desc_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$desc_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }
-        ## Filtering ends
-        
-        # input <- 2
-        # input$desc_sel_city <- 'Vienna'
-        # input$desc_sel_date <- '2017-11-01'
-        # thisID <- 'price'
-        # input$desc_sel_three_variables <- c('price', 'distance')
-        # input$desc_sel_three_variables_factor <- c()
-        # data_ <- data
-        #         
         data_c <- reactive_data() %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
             select(c(c("city"), input$desc_sel_three_variables, input$desc_sel_three_variables_factor)) %>% 
@@ -599,33 +532,13 @@ shinyServer(function(input, output, session) {
 
     
     output$desc_histogram_factor <- renderPlot({
+      selection_check(c(input$desc_sel_three_variables_factor))
+      
         loading(input$desc_sel_city)
-        # 
-        
+
         data_ <- reactive_data()
         
-        # if(input$desc_filter_check == TRUE){
-        #     for(i in input$desc_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$desc_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }
-        ## Filtering ends
-        
-        
-        # input$desc_sel_city <- 'Amsterdam'
-        # input$desc_sel_date <- '2017-11-01'
-        # thisID <- 'price'
-        # input$desc_sel_three_variables <- c('price', 'distance')
-        # input$desc_sel_three_variables_factor <- c()
-        # data_ <- data
-        #         
+
         data_c <- reactive_data() %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
             select(c(c("city"), input$desc_sel_three_variables, input$desc_sel_three_variables_factor)) %>% 
@@ -639,8 +552,8 @@ shinyServer(function(input, output, session) {
             drop_na() %>% 
             filter_all(all_vars(!is.infinite(.)))
         
-        
-        myPlots <- lapply(c(input$desc_sel_three_variables_factor), desc_plotting_function, data_ = data_, data_c = data_c)
+        factors_ <- setdiff(input$desc_sel_three_variables_factor, c('District'))
+        myPlots <- lapply(factors_, desc_plotting_function, data_ = data_, data_c = data_c)
         
         
         p <- plot_grid(plotlist = myPlots, nrow = 1)
@@ -648,27 +561,69 @@ shinyServer(function(input, output, session) {
         return(p)
     }, bg = background_hex)
     
+    
+    output$desc_histogram_factor_district <- renderPlot({
+      selection_check(c(input$desc_sel_three_variables_factor))
+      loading(input$desc_sel_city)
+      
+      if ('District' %notin% input$desc_sel_three_variables_factor){
+        return()
+      }
+      else{
+    
+      data_c <- data %>% 
+        filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
+        select(city, District)
+      color_vector <- c(color[2], color[3], color[4])
+      
+      data_di <- data_c %>% 
+        group_by(city, District) %>%
+        dplyr::summarise(n = n()) %>% 
+        dplyr::arrange(desc(n)) %>% 
+        head(20)
+      
+      data_ci <- data_c %>% 
+        group_by(city) %>% 
+        dplyr::summarise(n_all = n())
+        
+      data_c <- data_di %>% merge(data_ci) %>% 
+        mutate(n_perc = n / n_all)
+
+      summary(data_c)
+      p <- data_c %>% 
+        ggplot(aes(x = reorder(District, n_perc),
+                   y = n_perc,
+                   fill = city,
+                   color = city)) +
+        geom_bar(stat = 'identity',
+                 show.legend = F) + 
+        coord_flip() +
+        scale_fill_manual(values=color_vector) +
+        scale_color_manual(values = color.outline) +
+        ggtitle(paste("Variable name:  ", 'District')) +
+        scale_y_continuous("Percentage", labels = scales::percent_format(accuracy = 1L)) +
+        xlab("") +
+        theme_gg() 
+      
+      
+      p
+      
+      return(p)      
+      }
+      
+    }, bg = background_hex)
+    
         
     output$desc_nrows <- renderUI({
         loading(input$desc_sel_city)
+      selection_check(c(input$desc_sel_three_variables, input$desc_sel_three_variables_factor))
+      
         data_ <- reactive_data()
-        
-        # if(input$desc_filter_check == TRUE){
-        #     for(i in input$desc_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$desc_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        ## Filtering ends
+
         data_ <- data_ %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>%
-            select(input$desc_sel_three_variables) 
+            select(input$desc_sel_three_variables, input$desc_sel_three_variables_factor) %>% 
+          drop_na()
         
         HTML(paste0('Number of observations: ', nrow(data_)))
         
@@ -678,22 +633,10 @@ shinyServer(function(input, output, session) {
     #### Show basic descriptive stats table:  (mean, sd, median, min, max, p5, p95)
     output$desc_summary <- renderTable({
         loading(input$desc_sel_city)
-
+        selection_check(c(input$desc_sel_three_variables))
+      
         data_ <- reactive_data()
-        
-        # if(input$desc_filter_check == TRUE){
-        #     for(i in input$desc_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$desc_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        ## Filtering ends
+    
         data_ <- data_ %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>%
             select(input$desc_sel_three_variables) 
@@ -715,24 +658,10 @@ shinyServer(function(input, output, session) {
     
     output$desc_summary_factor <- renderTable({
         loading(input$desc_sel_city)
-        
+        selection_check(c(input$desc_sel_three_variables_factor))
+      
         data_ <- reactive_data()
         
-        # if(input$desc_filter_check == TRUE){
-        #     for(i in input$desc_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$desc_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$desc_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }   
-        
-        ## Filtering ends
-        ## Factor
         data_ <- data_ %>% 
             filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
             select(input$desc_sel_three_variables_factor) %>% 
@@ -769,10 +698,10 @@ shinyServer(function(input, output, session) {
     output$comp_sel_date <- renderUI({
         selectInput(inputId = "comp_sel_date",
                     label = "Select a date:",
-                    choices = unique(data$date),
+                    choices = sort(unique(data$date)),
                     multiple = FALSE,
                     selectize = TRUE,
-                    selected = c("2017-11-01"))
+                    selected = c("2017-11-11_WEEKDAY"))
     })
     
     
@@ -781,7 +710,7 @@ shinyServer(function(input, output, session) {
         selectable_names <- setdiff(names(data)[ifelse(sapply(data, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  "weekend", "holiday", "city", "country", "offer", "ratingta", "ratingta_count"))
         
         selectizeInput(inputId = "comp_sel_three_variables",
-                    label = "Select numeric variables:",
+                    label = "Select quantitative variables:",
                     choices = selectable_names,
                     multiple = TRUE,
                     options = list(maxItems = 3),
@@ -791,7 +720,7 @@ shinyServer(function(input, output, session) {
     
     ### Pick factor variables (default: price, distance, stars)
     output$comp_sel_three_variables_factor <-renderUI({
-        selectable_names <- setdiff(names(data)[ifelse(sapply(data, is.factor) == F, F, T)], c("month", "year", "hotel_id", "weekend", "holiday", "city", "country", "offer", "date"))
+        selectable_names <- setdiff(names(data)[ifelse(sapply(data, is.factor) == F, F, T)], c("month", "year", "hotel_id", "weekend", "holiday", "city", "country", "offer", "date", "District"))
         
         selectizeInput(inputId = "comp_sel_three_variables_factor",
                     label = "Select categorical variables:",
@@ -800,56 +729,8 @@ shinyServer(function(input, output, session) {
                     options = list(maxItems = 3),
                     selected = c("stars"))
     })
-    
-    ### Filter extreme values
-    output$comp_filter_check <- renderUI({
-        checkboxInput("comp_filter_check",
-                      strong("Tick this if you would like to filter values"), 
-                      FALSE)
-    })
-    
-    
-    # Render the sliders
-    output$comp_filters <- renderUI({
-        loading(input$comp_sel_cities)
-        
-        data_ <- reactive_data() %>% 
-            filter(city %in% input$comp_sel_cities & date == input$comp_sel_date) %>% 
-            select(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
-        
-        xAxisGroup <- unique(names(data_))
-        
-        # First, create a list of sliders each with a different name
-        filtering_function <- function(i) {
-            inputName <- paste0("comp_filter_", xAxisGroup[i])
-            column_name <- xAxisGroup[i]
-            
-            if(class(data[[column_name]]) != 'factor'){
-                inputpanel <- sliderInput(inputName,
-                                          xAxisGroup[i],
-                                          min=min(data_[column_name], na.rm = T),
-                                          max=max(data_[column_name], na.rm = T),
-                                          value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-            }
-            else{
-                inputpanel <- selectInput(inputName,
-                                          label = xAxisGroup[i],
-                                          choices = unique(as.character(data_[[column_name]])),
-                                          multiple = TRUE,
-                                          selectize = TRUE,
-                                          selected = unique(as.character(data_[[column_name]])))
-            }
-            
-            return(conditionalPanel(condition = "input.comp_filter_check == 1", inputpanel))
-        }
-        
-        sliders <- lapply(1:length(xAxisGroup), filtering_function)
-        
-        
-        
-        # Create a tagList of sliders (this is important)
-        do.call(tagList, sliders)
-    })
+
+
     
     
     comp_plotting_function <-  function(thisID, data_, index, vars_all){
@@ -961,8 +842,6 @@ shinyServer(function(input, output, session) {
             q <- ggplot_build(p)
             
             q$data[[1]] <- q$data[[1]] %>% mutate_all(~replace(., is.na(.), 0))
-            # q$data[[1]] <- q$data[[1]][order(q$data[[1]]$xmin),]
-            # q$data[[1]]$xmin <- replace(sort(q$data[[1]]$xmin, na.last = T), 1, 0)
             q$layout$panel_params[[1]]$x$breaks <- sort(q$data[[1]]$xmin)[c(T, F)]
             q$layout$panel_params[[1]]$x$breaks <- replace(q$layout$panel_params[[1]]$x$breaks, 1, 0)
             q$layout$panel_params[[1]]$x$breaks <- round(q$layout$panel_params[[1]]$x$breaks, digits = ifelse(mean(q$layout$panel_params[[1]]$x$breaks) > 100, 0,
@@ -976,10 +855,83 @@ shinyServer(function(input, output, session) {
         return(p)
     
     }
-  
+    
+    # output$comp_histogram_factor_district <- renderPlot({
+    #   selection_check(c(input$desc_sel_three_variables_factor))
+    #   loading(input$desc_sel_city)
+    #   
+    #   if ('District' %notin% input$desc_sel_three_variables_factor){
+    #     return()
+    #   }
+    #   else{
+    #     
+    #     data_c <- reactive_data() %>%
+    #       filter(city %in% input$comp_sel_cities & date == input$comp_sel_date) %>%
+    #       select(District, city)
+    #     
+    #     color_vector <- c(color[2], color[3], color[4])
+    #     
+    #     data_di_1 <- data_c %>% 
+    #       filter(city == input$comp_sel_cities[1]) %>% 
+    #       group_by(city, District) %>%
+    #       dplyr::summarise(n = n()) %>% 
+    #       dplyr::arrange(desc(n)) %>% 
+    #       head(20)
+    #     
+    #     data_di_2 <- data_c %>% 
+    #       filter(city == input$comp_sel_cities[2]) %>% 
+    #     group_by(city, District) %>%
+    #       dplyr::summarise(n = n()) %>% 
+    #       dplyr::arrange(desc(n)) %>% 
+    #       head(20)
+    #     
+    #     data_ci <- data_c %>% 
+    #       group_by(city) %>% 
+    #       dplyr::summarise(n_all = n())
+    #     
+    #     data_c <- data_di_1 %>% merge(data_ci) %>% merge(data_di_2)
+    #       mutate(n_perc = n / n_all)
+    #     
+    #     data__ <- data_c
+    #     
+    #     p <- ggplot(data__, aes(x = reorder(District, n_perc),
+    #                  y = n_perc,
+    #                  fill = city,
+    #                  color = city)) +
+    #       geom_bar(data = subset(data__, city == input$comp_sel_cities[1]),
+    #                aes(y = n_perc),
+    #                position = 'identity',
+    #                alpha = 0.3,
+    #                size = 1.05,
+    #                show.legend = show_legend) +
+    #       geom_bar(data = subset(data__, city == input$comp_sel_cities[2]),
+    #                aes(y = n_perc),
+    #                position = 'identity',
+    #                alpha = 0.3,
+    #                size = 0.95,
+    #                show.legend = show_legend) +
+    #       coord_flip() +
+    #       scale_fill_manual(values=color_vector) +
+    #       scale_color_manual(values = color.outline) +
+    #       ggtitle(paste("Variable name:  ", 'District')) +
+    #       scale_y_continuous("Percentage", labels = scales::percent_format(accuracy = 1L)) +
+    #       theme(legend.position = "right",
+    #             legend.text = element_text(size = 18),
+    #             legend.title = element_blank()) +
+    #       xlab("") +
+    #       theme_gg() 
+    #     
+    #     
+    #     p
+    #     
+    #     return(p)      
+    #   }
+    # })
     
     output$comp_histogram <- renderPlot({
         loading(input$comp_sel_cities)
+       selection_check(c(input$comp_sel_three_variables))
+      
         
         data_ <- reactive_data()
         
@@ -1000,8 +952,10 @@ shinyServer(function(input, output, session) {
     
     
     output$comp_histogram_factor <- renderPlot({
+      
         loading(input$comp_sel_cities)
-        
+        selection_check(c(input$comp_sel_three_variables_factor))
+      
         data_ <- reactive_data()
         
         data_ <- data_ %>%
@@ -1032,23 +986,11 @@ shinyServer(function(input, output, session) {
     
     output$comp_summary_1 <- renderTable({
         loading(input$comp_sel_cities)
+        selection_check(c(input$comp_sel_three_variables))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        
-        ## Filtering ends
+
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[1] & date == input$comp_sel_date) %>%
             select(input$comp_sel_three_variables) 
@@ -1069,21 +1011,10 @@ shinyServer(function(input, output, session) {
     
     output$comp_nrows_1 <- renderUI({
         loading(input$comp_sel_cities)
+        selection_check(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }
         
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[1] & date == input$comp_sel_date)
@@ -1093,21 +1024,10 @@ shinyServer(function(input, output, session) {
 
     output$comp_nrows_2 <- renderUI({
         loading(input$comp_sel_cities)
+        selection_check(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }
         
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[2] & date == input$comp_sel_date)
@@ -1117,23 +1037,11 @@ shinyServer(function(input, output, session) {
     
     output$comp_summary_factor_1 <- renderTable({
         loading(input$comp_sel_cities)
+      selection_check(c(input$comp_sel_three_variables_factor))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        
-        ## Filtering ends
+
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[1] & date == input$comp_sel_date) %>% 
             select(input$comp_sel_three_variables_factor) %>% 
@@ -1155,23 +1063,11 @@ shinyServer(function(input, output, session) {
     
     output$comp_summary_2 <- renderTable({
         loading(input$comp_sel_cities)
+        selection_check(c(input$comp_sel_three_variables))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        
-        ## Filtering ends
+
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[2] & date == input$comp_sel_date) %>%
             select(input$comp_sel_three_variables) 
@@ -1192,23 +1088,11 @@ shinyServer(function(input, output, session) {
     
     output$comp_summary_factor_2 <- renderTable({
         loading(input$comp_sel_cities)
+        selection_check(c(input$comp_sel_three_variables_factor))
+      
         
         data_ <- reactive_data()
-        
-        # if(input$comp_filter_check == TRUE){
-        #     for(i in input$comp_sel_three_variables){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-        #     }
-        #     for(i in input$comp_sel_three_variables_factor){
-        #         filter_obj <- eval(parse(text = paste0("input$comp_filter_", i)))
-        #         data_ <- data_ %>%
-        #             filter(get(i) %in% filter_obj)
-        #     }
-        # }        
-        
-        ## Filtering ends
+
         data_ <- data_ %>% 
             filter(city == input$comp_sel_cities[2] & date == input$comp_sel_date) %>% 
             select(input$comp_sel_three_variables_factor) %>% 
@@ -1246,130 +1130,26 @@ shinyServer(function(input, output, session) {
     output$corr_sel_date <- renderUI({
             selectInput(inputId = "corr_sel_date",
                         label = "Select a date:",
-                        choices = unique(data$date),
+                        choices = sort(unique(data$date)),
                         multiple = FALSE,
                         selectize = TRUE,
-                        selected = c("2017-11-01"))
+                        selected = c("2017-11-11_WEEKDAY"))
     })
 
 
-    
-    # Render the sliders
-    output$corr_filters <- renderUI({
-        data_ <- reactive_data() %>% 
-            filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
-            select(c(input$comp_sel_three_variables, input$comp_sel_three_variables_factor))
-        
-        xAxisGroup <- unique(names(data_))
-        
-        # First, create a list of sliders each with a different name
-        filtering_function <- function(i) {
-            inputName <- paste0("corr_filter_", xAxisGroup[i])
-            column_name <- xAxisGroup[i]
-            
-            if(class(data[[column_name]]) != 'factor'){
-                inputpanel <- sliderInput(inputName,
-                                          xAxisGroup[i],
-                                          min=min(data_[column_name], na.rm = T),
-                                          max=max(data_[column_name], na.rm = T),
-                                          value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-            }
-            else{
-                inputpanel <- selectInput(inputName,
-                                          label = xAxisGroup[i],
-                                          choices = unique(as.character(data_[[column_name]])),
-                                          multiple = TRUE,
-                                          selectize = TRUE,
-                                          selected = unique(as.character(data_[[column_name]])))
-            }
-            
-            return(conditionalPanel(condition = "input.corr_filter_check == 1", inputpanel))
-        }
-        
-        sliders <- lapply(1:length(xAxisGroup), filtering_function)
-        
-        
-        
-        # Create a tagList of sliders (this is important)
-        do.call(tagList, sliders)
-    })
     
     output$corr_ci <- renderUI({
         checkboxInput("corr_ci", "Add 95% confidence interval", FALSE)
     })
     
-    
-    ### Filter extreme values
-    output$corr_filter_check <- renderUI({
-        checkboxInput("corr_filter_check",
-                      strong("Tick this if you would like to filter values"), 
-                      FALSE)
-        })
 
-    output$corr_sel_x_filter <- renderUI({
-        req(input$corr_sel_x)
-        
-        data_ <- reactive_data() %>% 
-            filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
-            select(input$corr_sel_x, input$corr_sel_y)
-        
-        # data_[input$corr_sel_x] <- ifelse(input$corr_sel_x_ff == "Yes", log(data_[input$corr_sel_x]), data[input$corr_sel_x])
-        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
-        
-        conditionalPanel(condition = "input.corr_filter_check == 1",                   
-                         if(class(data[[input$corr_sel_x]]) != 'factor'){
-                             inputpanel <- sliderInput('corr_sel_x_filter',
-                                                       'X axis filter',
-                                                       min=min(data_[input$corr_sel_x], na.rm = T),
-                                                       max=max(data_[input$corr_sel_x], na.rm = T),
-                                                       value=c(min(data_[input$corr_sel_x], na.rm = T), max(data_[input$corr_sel_x], na.rm = T)))
-                         }
-                         else{
-                             inputpanel <- selectInput('corr_sel_x_filter',
-                                                       label = 'X axis filter',
-                                                       choices = unique(as.character(data_[[input$corr_sel_x]])),
-                                                       multiple = TRUE,
-                                                       selectize = TRUE,
-                                                       selected = unique(as.character(data_[[input$corr_sel_x]])))
-                         })
-    })
-    
-    
-    output$corr_sel_y_filter <- renderUI({
-        req(input$corr_sel_x)
-        
-        data_ <- reactive_data() %>% 
-            filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
-            select(input$corr_sel_y, input$corr_sel_y)
-        # 
-        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
-        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
-        
-        conditionalPanel(condition = "input.corr_filter_check == 1",                   
-                         if(class(data[[input$corr_sel_y]]) != 'factor'){
-                             inputpanel <- sliderInput('corr_sel_y_filter',
-                                                       'Y axis filter',
-                                                       min=min(data_[input$corr_sel_y], na.rm = T),
-                                                       max=max(data_[input$corr_sel_y], na.rm = T),
-                                                       value=c(min(data_[input$corr_sel_y], na.rm = T), max(data_[input$corr_sel_y], na.rm = T)))
-                         }
-                         else{
-                             inputpanel <- selectInput('corr_sel_y_filter',
-                                                       label = 'Y axis filter',
-                                                       choices = unique(as.character(data_[[input$corr_sel_y]])),
-                                                       multiple = TRUE,
-                                                       selectize = TRUE,
-                                                       selected = unique(as.character(data_[[input$corr_sel_y]])))
-                         })
-    })
-     
     
     ### X selector
     output$corr_sel_x <- renderUI({
         selectable_names <- setdiff(names(data)[ifelse(sapply(data, is.factor) == F, T, F)], c("month", "year", "hotel_id"))
         
         selectInput(inputId = "corr_sel_x",
-                    label = strong("X: numerical variable:"), 
+                    label = strong("X: quantitative variable:"), 
                     choices = selectable_names,
                     selected = "distance")
     })
@@ -1426,24 +1206,13 @@ shinyServer(function(input, output, session) {
     
     output$corr_nrows <- renderUI({
         loading(input$corr_sel_city)
-        
+      dataframe_length_check()
+      
         if(is.null(input$corr_sel_x) || is.null(input$corr_sel_y)){return()}
         
         data_ <- reactive_data() %>% 
             filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
             select(input$corr_sel_x, input$corr_sel_y)
-        # 
-        # data_[input$corr_sel_x] <- ifelse(input$corr_sel_x_ff == "Yes", log(data_[input$corr_sel_x]), data[input$corr_sel_x])
-        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
-        # 
-        # data_ %>% filter(get(input$corr_sel_x) < 5)
-        
-        ### Filtering
-        # if(input$corr_filter_check == TRUE){
-        #     data_ <- data_ %>% 
-        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        # }
         
         HTML(paste0('Number of observations: ', nrow(data_)))
         
@@ -1452,25 +1221,14 @@ shinyServer(function(input, output, session) {
     ### Plots
     output$corr_scatterplot <- renderPlot({
         loading(input$corr_sel_city)
-        
+      dataframe_length_check()
 
         if(is.null(input$corr_sel_x) || is.null(input$corr_sel_y)){return()}
         
         data_ <- reactive_data() %>% 
             filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
             select(input$corr_sel_x, input$corr_sel_y)
-        # 
-        # data_[input$corr_sel_x] <- ifelse(input$corr_sel_x_ff == "Yes", log(data_[input$corr_sel_x]), data[input$corr_sel_x])
-        # data_[input$corr_sel_y] <- ifelse(input$corr_sel_y_ff == "Yes", log(data_[input$corr_sel_y]), data[input$corr_sel_y])
-        # 
-        # data_ %>% filter(get(input$corr_sel_x) < 5)
-        
-        ### Filtering
-        # if(input$corr_filter_check == TRUE){
-        #     data_ <- data_ %>% 
-        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        # }
+  
         
         if(input$corr_regressionline_type == 'linear')
             {regressionline_type <- geom_smooth(method = "lm", formula = y ~ x, color = color[4], se = input$corr_ci)}
@@ -1492,8 +1250,7 @@ shinyServer(function(input, output, session) {
                         fill = color[1])) +
             geom_point(size = 3,
                           alpha = 0.7,
-                       show_legend = F,
-                       shape = 1) +
+                       show_legend = F) +
             scale_fill_manual(values=c(color[1], color[2], color[3])) +
             scale_color_manual(values = c(color[1], color[2], color[3])) +
             {if(input$corr_sel_x_ff == "Yes") scale_x_log10()} +
@@ -1518,7 +1275,8 @@ shinyServer(function(input, output, session) {
     
     output$corr_boxplot <- renderPlot({
         loading(input$corr_sel_city)
-        
+      dataframe_length_check()
+      
 
         if(is.null(input$corr_sel_factor) || is.null(input$corr_sel_y)){return()}
         
@@ -1538,10 +1296,9 @@ shinyServer(function(input, output, session) {
                         color = color[1],
                         fill = color[1])) +
             geom_boxplot(size = 1,
-                       alpha = 0.3,
-                       show_legend = F,
-                       shape = 1) +
-            geom_jitter(alpha = 0.2) + 
+                       alpha = 0.7,
+                       show_legend = F) +
+            geom_jitter(alpha = 0.7) + 
             scale_fill_manual(values=c(color[1], color[2], color[3])) +
             scale_color_manual(values = c(color[1], color[2], color[3])) +
             xlab(input$corr_sel_factor) +
@@ -1563,28 +1320,104 @@ shinyServer(function(input, output, session) {
     
     output$corr_corr <- renderUI({
         loading(input$corr_sel_city)
-        
+      dataframe_length_check()
         req(input$corr_sel_x)
         
-        if(!is.numeric(data[[input$corr_sel_x]]) || !is.numeric(data[[input$corr_sel_y]])){return("Correlation only makes sense with numeric variables")}
-        
         data_ <- reactive_data() %>% 
-            filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
-            select(input$corr_sel_x, input$corr_sel_y)
+          filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
+          select(input$corr_sel_x, input$corr_sel_y) %>% 
+          drop_na()
+      
+          
         
         
-        ### Filtering
-        # if(input$corr_filter_check == TRUE){
-        #     data_ <- data_ %>% 
-        #         filter(get(input$corr_sel_x) >= input$corr_sel_x_filter[1] & get(input$corr_sel_x) <= input$corr_sel_x_filter[2]) %>% 
-        #         filter(get(input$corr_sel_y) >= input$corr_sel_y_filter[1] & get(input$corr_sel_y) <= input$corr_sel_y_filter[2])
-        # }
+
+        # library(mgcv)
         
-        HTML(paste0("<h3> Correlation: </h3> <b> <h2> ", round(cor(data_[[input$corr_sel_x]], data_[[input$corr_sel_y]]), digits = 2), "</b> </h2>"))
+        # summary(gam(get(y) ~ get(x), data = data_))
+        x <- input$corr_sel_x
+        y <- input$corr_sel_y
+        
+        if(input$corr_sel_x_ff == "Yes"){
+          data_[[x]] <- log(data_[[x]])
+        }
+        if(input$corr_sel_y_ff == "Yes"){
+          data_[[y]] <- log(data_[[y]])
+        }
+        # reg
+        # loess(as.formula(get(y) ~ get(x)), data = data_)
+        # 
+        # reg <- lm(get(y) ~ get(x) + I(get(x)^2), data = data_)
+        # 
+        # reg <- loess(data_[[y]], data_[[x]])
+        # reg <- loess(formula = data_[[y]] ~ data_[[x]])
+        # a <- summary(reg)
+        # 
+        data_ <- data_ %>%      
+          filter_all(all_vars(!is.infinite(.))) %>% 
+          drop_na()
+          
+        if(input$corr_regressionline_type == 'linear')
+        {reg <- lm(get(y) ~ get(x), data = data_)}
+        if(input$corr_regressionline_type == 'lowess')
+        {reg <- loess(data_[[y]] ~ data_[[x]])}
+        if(input$corr_regressionline_type == 'quadratic')
+        {reg <- lm(get(y) ~ get(x) + I(get(x)^2), data = data_)}
+        if(input$corr_regressionline_type == 'cubic')
+        {reg <- lm(get(y) ~ get(x) + I(get(x)^2) + I(get(x)^3), data = data_)}
+    
+        r2 <- cor(data_[[y]], predict(reg))^2
+    
+        
+        HTML(paste0("<h3> R2: </h3> <b> <h2> ", round(r2, digits = 8), "</b> </h2>"))
         
         })
  
 
+    output$corr_corr_factor <- renderUI({
+      loading(input$corr_sel_city)
+      dataframe_length_check()
+      req(input$corr_sel_x)
+      
+      data_ <- reactive_data() %>% 
+        filter(city == input$corr_sel_city & date == input$corr_sel_date) %>% 
+        select(input$corr_sel_y, input$corr_sel_factor) %>% 
+        drop_na()
+      
+      
+      
+      # library(mgcv)
+      
+      # summary(gam(get(y) ~ get(x), data = data_))
+      x <- input$corr_sel_factor
+      y <- input$corr_sel_y
+      # reg
+      # loess(as.formula(get(y) ~ get(x)), data = data_)
+      # 
+      # reg <- lm(get(y) ~ get(x) + I(get(x)^2), data = data_)
+      # 
+      # reg <- loess(data_[[y]], data_[[x]])
+      # reg <- loess(formula = data_[[y]] ~ data_[[x]])
+      # a <- summary(reg)
+      # 
+      
+      if(input$corr_sel_y_ff == "Yes"){
+        data_[[y]] <- log(data_[[y]])
+      }
+      data_ <- data_ %>%      
+        filter_all(all_vars(!is.infinite(.))) %>% 
+        drop_na()
+      
+      reg <- lm(get(y) ~ get(x), data = data_)
+  
+      r2 <- cor(data_[[y]], predict(reg))^2
+      
+      
+      HTML(paste0("<h3> R2: </h3> <b> <h2> ", round(r2, digits = 8), "</b> </h2>"))
+      
+    })
+    
+    
 
 
 ########################### MULTIVARIATE REGRESSION #########################################
@@ -1604,10 +1437,10 @@ output$reg_sel_city <- renderUI({
 output$reg_sel_date <- renderUI({
     selectInput(inputId = "reg_sel_date",
                 label = "Select a date:",
-                choices = unique(data_reg$date),
+                choices = sort(unique(data_reg$date)),
                 multiple = FALSE,
                 selectize = TRUE,
-                selected = c("2017-11-01"))
+                selected = c("2017-11-11_WEEKDAY"))
 })
 
 
@@ -1624,20 +1457,12 @@ output$reg_sel_dependent <- renderUI({
 
 
 
-### Filter extreme values
-output$reg_filter_check <- renderUI({
-    checkboxInput("reg_filter_check",
-                  strong("Tick this if you would like to filter values"), 
-                  FALSE)
-})
-
-
 ### Pick three variables (default: price, distance, stars)
 output$reg_sel_three_variables_A <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_A",
-                label = "Select numeric variables:",
+                label = "Select quantitative variables:",
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
@@ -1665,7 +1490,7 @@ output$reg_sel_three_variables_B <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_B",
-                label = "Select numeric variables:",
+                label = "Select quantitative variables:",
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
@@ -1692,7 +1517,7 @@ output$reg_sel_three_variables_C <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$reg_sel_dependent))
     
     pickerInput(inputId = "reg_sel_three_variables_C",
-                label = "Select numeric variables:",
+                label = "Select quantitative variables:",
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
@@ -1712,38 +1537,29 @@ output$reg_sel_three_variables_factor_C <-renderUI({
 })
 
 
-### Filter extreme values
-output$reg_filter_check <- renderUI({
-    checkboxInput("reg_filter_check",
-                  strong("Tick this if you would like to filter values"), 
-                  FALSE)
-})
-
-
-
 
 interaction_terms <- c("",
                       "distance*rating", 
                            "distance*stars",
                            "distance*Offer_Cat",
-                           "distance*acc_",
+                           "distance*Type",
                            "ln_distance*rating",
                            "ln_distance*stars",
                            "ln_distance*Offer_Cat",
-                           "ln_distance*acc_",
+                           "ln_distance*Type",
                            "stars*rating",
-                           "Nh*rating",
+                           "District*rating",
                            "Offer_Cat*stars",
-                           "acc_*stars",
-                           "acc_*rating",
+                           "Type*stars",
+                           "Type*rating",
                            "price*distance",
                            "price*rating",
                            "price*stars",
-                           "price*acc_",
+                           "price*Type",
                            "ln_price*distance",
                            "ln_price*rating",
                            "ln_price*stars",
-                           "ln_price*acc_")
+                           "ln_price*Type")
 
 output$reg_sel_interaction_terms_A <- renderUI({
     selectable_names <- interaction_terms
@@ -1770,69 +1586,8 @@ output$reg_sel_interaction_terms_C <- renderUI({
 })
 
 
-# Render the sliders
-# output$reg_filters <- renderUI({
-#     data_ <- reactive_data_reg() %>% 
-#         filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-#         select(unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A,
-#                  input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B,
-#                input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C)))
-#     
-#     xAxisGroup <- unique(names(data_))
-#     
-#     # First, create a list of sliders each with a different name
-#     filtering_function <- function(i) {
-#         inputName <- paste0("reg_filter_", xAxisGroup[i])
-#         column_name <- xAxisGroup[i]
-#         
-#         if(class(data[[column_name]]) != 'factor'){
-#             inputpanel <- sliderInput(inputName,
-#                                       xAxisGroup[i],
-#                                       min=min(data_[column_name], na.rm = T),
-#                                       max=max(data_[column_name], na.rm = T),
-#                                       value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-#         }
-#         else{
-#             inputpanel <- selectInput(inputName,
-#                                       label = xAxisGroup[i],
-#                                       choices = unique(as.character(data_[[column_name]])),
-#                                       multiple = TRUE,
-#                                       selectize = TRUE,
-#                                       selected = unique(as.character(data_[[column_name]])))
-#         }
-#         
-#         return(conditionalPanel("input.reg_filter_check == 1", inputpanel))
-#     }
-#     
-#     sliders <- lapply(1:length(xAxisGroup), filtering_function)
-#     
-#     # Create a tagList of sliders (this is important)
-#     do.call(tagList, sliders)
-# })
-
-
-# reactive_data_reg <- reactive({
-#     data_ <- reactive_data_reg()
-#     
-#     if(input$reg_filter_check == TRUE){
-#         for(i in unique(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_B, input$reg_sel_three_variables_C))){
-#             filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
-#             data_ <- data_ %>%
-#                 filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-#         }
-#         for(i in unique(c(input$reg_sel_three_variables_factor_A, input$reg_sel_three_variables_factor_B, input$reg_sel_three_variables_factor_C))){
-#             filter_obj <- eval(parse(text = paste0("input$reg_filter_", i)))
-#             data_ <- data_ %>%
-#                 filter(get(i) %in% filter_obj)
-#         }
-#     }
-#     data_
-# })
-
-
-
 reg_reg_A <- reactive({
-
+    
     interaction_terms <- split_interaction_terms(input$reg_sel_interaction_terms_A)
     
     
@@ -1840,8 +1595,7 @@ reg_reg_A <- reactive({
         filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent),
                interaction_terms) %>% 
-        drop_na() %>%         
-        filter_all(all_vars(!is.infinite(.)))
+        drop_na()
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -1852,7 +1606,8 @@ reg_reg_A <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    
+    data_ <- District_basing(data_)
     
     variables <- c(input$reg_sel_three_variables_A, interaction_terms, input$reg_sel_three_variables_factor_A)
     
@@ -1883,7 +1638,7 @@ reg_reg_B <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     variables <- c(input$reg_sel_three_variables_B, interaction_terms, input$reg_sel_three_variables_factor_B)
     f <- as.formula(paste(input$reg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
@@ -1915,7 +1670,7 @@ reg_reg_C <- reactive({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     variables <- c(input$reg_sel_three_variables_C, interaction_terms, input$reg_sel_three_variables_factor_C)
     f <- as.formula(paste(input$reg_sel_dependent, paste0(variables, collapse = " + "), sep = " ~ "))
@@ -1929,8 +1684,9 @@ reg_reg_C <- reactive({
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$reg_reg_table_A <- renderTable({
     loading(input$reg_sel_city)
-    
-    selection_check(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
                          split_interaction_terms(input$reg_sel_interaction_terms_A)))
     
     reg_A <- reg_reg_A()
@@ -1952,31 +1708,18 @@ output$reg_reg_table_A <- renderTable({
 
 output$reg_r_2_reg_A <- renderUI({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
     req(input$reg_sel_dependent)
     
-    selection_check(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
+    selection_check_reg(list(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, 
                          split_interaction_terms(input$reg_sel_interaction_terms_A)))
-    # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    #     select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # variables_A <- intersect(c(input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A), names(data_))
-    # f_A <- as.formula(paste(input$reg_sel_dependent, paste(variables_A, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_A <<- lm(f_A, data=data_)
-    # 
     
     reg_A <- reg_reg_A()
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 2), "</b> </h4>"))
  
 })
 
@@ -1984,28 +1727,13 @@ output$reg_r_2_reg_A <- renderUI({
 
 output$reg_reg_table_B <- renderTable({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
     req(input$reg_sel_dependent)
     
-    selection_check(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
+    selection_check_reg(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
                          split_interaction_terms(input$reg_sel_interaction_terms_B)))
-    
-    # data_ <- reactive_data_reg() %>%
-    #     filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    #     select(c(c("city", input$reg_sel_dependent), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables_B <- intersect(c(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B), names(data_))
-    # f_B <- as.formula(paste(input$reg_sel_dependent, paste(variables_B, collapse = " + "), sep = " ~ "))
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # reg_B <<- lm(f_B, data=data_)
     
     reg_B <- reg_reg_B()
 
@@ -2026,30 +1754,15 @@ output$reg_reg_table_B <- renderTable({
 
 output$reg_r_2_reg_B <- renderUI({
     loading(input$reg_sel_city)
-    
-    selection_check(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
-                       split_interaction_terms(input$reg_sel_interaction_terms_B)))
+  dataframe_length_check_reg()
   
-    # req(input$reg_sel_dependent)
-    # 
-    # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    #     select(c(c("city"), input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, input$reg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # variables_B <- intersect(c(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B), names(data_))
-    # f_B <- as.formula(paste(input$reg_sel_dependent, paste(variables_B, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_B <<- lm(f_B, data=data_)
-    # 
+    
+    selection_check_reg(list(input$reg_sel_three_variables_B, input$reg_sel_three_variables_factor_B, 
+                       split_interaction_terms(input$reg_sel_interaction_terms_B)))
+
     reg_B <- reg_reg_B()
 
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
@@ -2058,28 +1771,12 @@ output$reg_r_2_reg_B <- renderUI({
 output$reg_reg_table_C <- renderTable({
     loading(input$reg_sel_city)
     
+  dataframe_length_check_reg()
   
-    selection_check(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
+  
+    selection_check_reg(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
                        split_interaction_terms(input$reg_sel_interaction_terms_C)))
   
-    # req(input$reg_sel_dependent)
-    # 
-    # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    #     select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>% 
-    #     drop_na() %>% 
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables_C <- intersect(c(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C), names(data_))
-    # f_C <- as.formula(paste(input$reg_sel_dependent, paste(variables_C, collapse = " + "), sep = " ~ "))
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # reg_C <- lm(f_C, data=data_)
-    
     reg_C <- reg_reg_C()
     
     
@@ -2091,8 +1788,6 @@ output$reg_reg_table_C <- renderTable({
                        "CI 95" = c( paste0(as.character(round(confint_C[, 1], digits = 1)), " | ", as.character(round(confint_C[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
     
-    # df_C[1, 2] = round(unname(coeffs_C), 2)[1]
-    
     df_C
 })
 
@@ -2100,47 +1795,35 @@ output$reg_reg_table_C <- renderTable({
 
 output$reg_r_2_reg_C <- renderUI({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
-    selection_check(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
+    selection_check_reg(list(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, 
                        split_interaction_terms(input$reg_sel_interaction_terms_C)))
   
-    # req(input$reg_sel_dependent)
-    # 
-    # data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-    #     select(c(c("city"), input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C, input$reg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # variables_C <- intersect(c(input$reg_sel_three_variables_C, input$reg_sel_three_variables_factor_C), names(data_))
-    # f_C <- as.formula(paste(input$reg_sel_dependent, paste(variables_C, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_C <<- lm(f_C, data=data_)
-    
     reg_C <- reg_reg_C()
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
 output$reg_nrows_reg_A <- renderUI({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
     data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
-        select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
-        drop_na() %>%
-        filter_all(all_vars(!is.infinite(.)))
+        select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent))
+    
     HTML(paste0('Number of observations: ', nrow(data_)))
 })
 
 
 output$reg_nrows_reg_B <- renderUI({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
     data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
@@ -2152,6 +1835,8 @@ output$reg_nrows_reg_B <- renderUI({
 
 output$reg_nrows_reg_C <- renderUI({
     loading(input$reg_sel_city)
+  dataframe_length_check_reg()
+  
     
     data_ <- reactive_data_reg() %>% filter(city == input$reg_sel_city & date == input$reg_sel_date) %>% 
         select(c(c("city"), input$reg_sel_three_variables_A, input$reg_sel_three_variables_factor_A, input$reg_sel_dependent)) %>%
@@ -2172,7 +1857,7 @@ output$compreg_sel_three_variables <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(data_reg, is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  "", input$compreg_sel_dependent))
     
     pickerInput(inputId = "compreg_sel_three_variables",
-                label = "Select numeric variables:",
+                label = "Select quantitative variables:",
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
@@ -2232,10 +1917,10 @@ output$compreg_sel_city_A <- renderUI({
 output$compreg_sel_date_A <- renderUI({
     selectInput(inputId = "compreg_sel_date_A",
                 label = "Select a date:",
-                choices = unique(data_reg$date),
+                choices = sort(unique(data_reg$date)),
                 multiple = FALSE,
                 selectize = TRUE,
-                selected = c("2017-11-01"))
+                selected = c("2017-11-11_WEEKDAY"))
 })
 
 
@@ -2243,6 +1928,7 @@ output$compreg_sel_date_A <- renderUI({
 
 compreg_reg_A <- reactive({
     interaction_terms <- split_interaction_terms(input$compreg_sel_interaction_terms)
+    dataframe_length_check_reg()
     
     data_ <- reactive_data_reg() %>%
         filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
@@ -2262,7 +1948,7 @@ compreg_reg_A <- reactive({
       interaction_terms <- paste0(interaction_terms, collapse = " * ")
     }
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
@@ -2275,6 +1961,7 @@ compreg_reg_A <- reactive({
 
 compreg_reg_B <- reactive({
     interaction_terms <- split_interaction_terms(input$compreg_sel_interaction_terms)
+    dataframe_length_check_reg()
     
     data_ <- reactive_data_reg() %>%
         filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
@@ -2293,7 +1980,7 @@ compreg_reg_B <- reactive({
       interaction_terms <- paste0(interaction_terms, collapse = " * ")
     }
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
@@ -2306,6 +1993,7 @@ compreg_reg_B <- reactive({
 
 compreg_reg_C <- reactive({
     interaction_terms <- split_interaction_terms(input$compreg_sel_interaction_terms)
+    dataframe_length_check_reg()
     
     data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent),
@@ -2323,7 +2011,7 @@ compreg_reg_C <- reactive({
       interaction_terms <- paste0(interaction_terms, collapse = " * ")
     }
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     variables <- c(input$compreg_sel_three_variables, interaction_terms, input$compreg_sel_three_variables_factor)
     f <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
@@ -2338,38 +2026,20 @@ compreg_reg_C <- reactive({
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_A <- renderTable({
     loading(input$compreg_sel_dependent)
-    
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
-                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  dataframe_length_check_reg()
   
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_A <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # reg_A <<- lm(f_A, data=data_)
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+
     reg_A <- compreg_reg_A()
     
     coeffs_A <<- reg_A$coefficients
     confint_A <- confint(reg_A, level = 0.9) # for some reason 0.9 will give 0.95 in reality
     
-    # unname(coeffs_A)
-    
     df_A <- data.frame("Name" = c(names(coeffs_A)),
                        "Value" = paste0(round(unname(coeffs_A), 2), ifelse(sign(confint_A[, 1]) == sign(confint_A[, 2]), "*", "")),
                        "CI 95" = c(paste0(as.character(round(confint_A[, 1], digits = 1)), " | ", as.character(round(confint_A[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
-    
-    # df_A[1, 2] = round(unname(coeffs_A), 1)[1]
     
     df_A
 })
@@ -2377,28 +2047,15 @@ output$compreg_reg_table_A <- renderTable({
 
 output$compreg_r_2_reg_A <- renderUI({
     loading(input$compreg_sel_dependent)
-    
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
-                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  dataframe_length_check_reg()
   
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_A <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_A <<- lm(f_A, data=data_)
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+
     
     reg_A <- compreg_reg_A()
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_A)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
@@ -2418,10 +2075,10 @@ output$compreg_sel_city_B <- renderUI({
 output$compreg_sel_date_B <- renderUI({
     selectInput(inputId = "compreg_sel_date_B",
                 label = "Select a date:",
-                choices = unique(data_reg$date),
+                choices = sort(unique(data_reg$date)),
                 multiple = FALSE,
                 selectize = TRUE,
-                selected = c("2017-11-01"))
+                selected = c("2017-11-11_WEEKDAY"))
 })
 
 
@@ -2430,24 +2087,9 @@ output$compreg_sel_date_B <- renderUI({
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_B <- renderTable({
     loading(input$compreg_sel_dependent)
-    # 
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_B <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # reg_B <<- lm(f_B, data=data_)
-    
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
                        split_interaction_terms(input$compreg_sel_interaction_terms)))
   
   
@@ -2471,26 +2113,15 @@ output$compreg_reg_table_B <- renderTable({
 
 output$compreg_r_2_reg_B <- renderUI({
     loading(input$compreg_sel_dependent)
-    
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
-                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+  dataframe_length_check_reg()
   
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_B <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_B <<- lm(f_B, data=data_)
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+                       split_interaction_terms(input$compreg_sel_interaction_terms)))
+
     
     reg_B <- compreg_reg_B()
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_B)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
@@ -2510,10 +2141,10 @@ output$compreg_sel_city_C <- renderUI({
 output$compreg_sel_date_C <- renderUI({
     selectInput(inputId = "compreg_sel_date_C",
                 label = "Select a date:",
-                choices = unique(data_reg$date),
+                choices = sort(unique(data_reg$date)),
                 multiple = FALSE,
                 selectize = TRUE,
-                selected = c("2017-11-01"))
+                selected = c("2017-11-11_WEEKDAY"))
 })
 
 
@@ -2522,23 +2153,9 @@ output$compreg_sel_date_C <- renderUI({
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$compreg_reg_table_C <- renderTable({
     loading(input$compreg_sel_dependent)
-    # 
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # data_ <- Nh_basing(data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_C <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_C <<- lm(f_C, data=data_)
-    
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
                        split_interaction_terms(input$compreg_sel_interaction_terms)))
   
     reg_C <- compreg_reg_C()
@@ -2546,14 +2163,11 @@ output$compreg_reg_table_C <- renderTable({
     coeffs_C <<- reg_C$coefficients
     confint_C <- confint(reg_C, level = 0.9) # for some reason 0.9 will give 0.95 in reality
     
-    # unname(coeffs_C)
-    
+
     df_C <- data.frame("Name" = c(names(coeffs_C)),
                        "Value" = paste0(round(unname(coeffs_C), 2), ifelse(sign(confint_C[, 1]) == sign(confint_C[, 2]), "*", "")),
                        "CI 95" = c(paste0(as.character(round(confint_C[, 1], digits = 1)), " | ", as.character(round(confint_C[, 2], digits = 1))))) %>% 
         mutate(across(where(is.factor), as.character))
-    
-    # df_C[1, 2] = round(unname(coeffs_C), 1)[1]
     
     df_C
 })
@@ -2563,35 +2177,24 @@ output$compreg_reg_table_C <- renderTable({
 
 output$compreg_r_2_reg_C <- renderUI({
     loading(input$compreg_sel_dependent)
+  dataframe_length_check_reg()
   
-    selection_check(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
+    selection_check_reg(list(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, 
                        split_interaction_terms(input$compreg_sel_interaction_terms)))
-  
-    
-    # data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
-    #     select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
-    #     drop_na() %>%
-    #     filter_all(all_vars(!is.infinite(.)))
-    # 
-    # data_ <- Filter(function(x)(length(unique(x))>1), data_)
-    # 
-    # 
-    # variables <- intersect(c(input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor), names(data_))
-    # f_C <- as.formula(paste(input$compreg_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    # 
-    # reg_C <<- lm(f_C, data=data_)
+
     
     reg_C <- compreg_reg_C()
 
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg_C)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
 
 output$compreg_nrows_A <- renderUI({
     loading(input$compreg_sel_dependent)
-    
+  dataframe_length_check_reg()
+  
     data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_A & date == input$compreg_sel_date_A) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -2602,7 +2205,8 @@ output$compreg_nrows_A <- renderUI({
 
 output$compreg_nrows_B <- renderUI({
     loading(input$compreg_sel_dependent)
-    
+  dataframe_length_check_reg()
+  
     data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_B & date == input$compreg_sel_date_B) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -2613,7 +2217,8 @@ output$compreg_nrows_B <- renderUI({
 
 output$compreg_nrows_C <- renderUI({
     loading(input$compreg_sel_dependent)
-    
+  dataframe_length_check_reg()
+  
     data_ <- reactive_data_reg() %>% filter(city == input$compreg_sel_city_C & date == input$compreg_sel_date_C) %>% 
         select(c(c("city"), input$compreg_sel_three_variables, input$compreg_sel_three_variables_factor, input$compreg_sel_dependent)) %>%
         drop_na() %>%
@@ -2640,10 +2245,10 @@ output$pred_sel_city <- renderUI({
 output$pred_sel_date <- renderUI({
     selectInput(inputId = "pred_sel_date",
                 label = "Select a date:",
-                choices = unique(data_reg$date),
+                choices = sort(unique(data_reg$date)),
                 multiple = FALSE,
                 selectize = TRUE,
-                selected = c("2017-11-01"))
+                selected = c("2017-11-11_WEEKDAY"))
 })
 
 ### Pick a date
@@ -2670,7 +2275,7 @@ output$pred_sel_three_variables <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$pred_sel_dependent))
     
     pickerInput(inputId = "pred_sel_three_variables",
-                label = "Select numeric variables:",
+                label = "Select quantitative variables:",
                 choices = selectable_names,
                 multiple = TRUE,
                 selected = c("distance", "stars", "stars"))
@@ -2698,77 +2303,12 @@ output$pred_sel_interaction_terms <- renderUI({
 })
 
 
-### Filter extreme values
-# output$pred_filter_check <- renderUI({
-#     checkboxInput("pred_filter_check",
-#                   strong("Tick this if you would like to filter values"), 
-#                   FALSE)
-# })
-
-
-# # Render the sliders
-# output$pred_filters <- renderUI({
-#     data_ <- reactive_data_reg() %>% 
-#         filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
-#         select(unique(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor)))
-#     
-#     xAxisGroup <- unique(names(data_))
-#     
-#     # First, create a list of sliders each with a different name
-#     filtering_function <- function(i) {
-#         inputName <- paste0("pred_filter_", xAxisGroup[i])
-#         column_name <- xAxisGroup[i]
-#         
-#         if(class(data[[column_name]]) != 'factor'){
-#             inputpanel <- sliderInput(inputName,
-#                                       xAxisGroup[i],
-#                                       min=min(data_[column_name], na.rm = T),
-#                                       max=max(data_[column_name], na.rm = T),
-#                                       value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
-#         }
-#         else{
-#             inputpanel <- selectInput(inputName,
-#                                       label = xAxisGroup[i],
-#                                       choices = unique(as.character(data_[[column_name]])),
-#                                       multiple = TRUE,
-#                                       selectize = TRUE,
-#                                       selected = unique(as.character(data_[[column_name]])))
-#         }
-#         
-#         return(conditionalPanel("input.pred_filter_check == 1", inputpanel))
-#     }
-#     
-#     sliders <- lapply(1:length(xAxisGroup), filtering_function)
-#     
-#     # Create a tagList of sliders (this is important)
-#     do.call(tagList, sliders)
-# })
-
-
-# reactive_data_reg <- reactive({
-#     data_ <- reactive_data_reg()
-#     
-#     if(input$pred_filter_check == TRUE){
-#         for(i in unique(c(input$pred_sel_three_variables))){
-#             filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
-#             data_ <- data_ %>%
-#                 filter(get(i) >= filter_obj[1] & get(i) <= filter_obj[2])
-#         }
-#         for(i in unique(c(input$pred_sel_three_variables_factor))){
-#             filter_obj <- eval(parse(text = paste0("input$pred_filter_", i)))
-#             data_ <- data_ %>%
-#                 filter(get(i) %in% filter_obj)
-#         }
-#     }
-#     data_
-# })
-
-
 ### TABLE WITH 95% CI & ALL COEFFICIENTS & R
 output$pred_table <- renderTable({
     loading(input$pred_sel_city)
-
-    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
                        split_interaction_terms(input$pred_sel_interaction_terms)))
   
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
@@ -2782,7 +2322,7 @@ output$pred_table <- renderTable({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -2815,8 +2355,9 @@ output$pred_table <- renderTable({
 
 output$pred_r_2_reg <- renderUI({
     loading(input$pred_sel_city)
-
-    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
                        split_interaction_terms(input$pred_sel_interaction_terms)))
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
     
@@ -2830,7 +2371,7 @@ output$pred_r_2_reg <- renderUI({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -2847,14 +2388,16 @@ output$pred_r_2_reg <- renderUI({
     reg <<- lm(f, data=data_)
     
     
-    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg)$r.squared, digits = 1), "</b> </h4>"))
+    HTML(paste0("<h4> R squared: </h4> <b> <h4> ",round(summary(reg)$r.squared, digits = 2), "</b> </h4>"))
     
 })
 
 
 output$pred_best_deals <- renderTable({
     loading(input$pred_sel_city)
-    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
                        split_interaction_terms(input$pred_sel_interaction_terms)))
     
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
@@ -2869,7 +2412,7 @@ output$pred_best_deals <- renderTable({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -2900,8 +2443,9 @@ output$pred_best_deals <- renderTable({
 
 output$pred_worst_deals <- renderTable({
     loading(input$pred_sel_city)    
-    
-    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
                        split_interaction_terms(input$pred_sel_interaction_terms)))  
   
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
@@ -2917,7 +2461,7 @@ output$pred_worst_deals <- renderTable({
     
     
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -2929,11 +2473,6 @@ output$pred_worst_deals <- renderTable({
     
     variables <- c(input$pred_sel_three_variables, interaction_terms, input$pred_sel_three_variables_factor)
     f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
-    
-    
-    
-    # variables <- intersect(c(input$pred_sel_three_variables, input$pred_sel_three_variables_factor), names(data_))
-    # f <- as.formula(paste(input$pred_sel_dependent, paste(variables, collapse = " + "), sep = " ~ "))
     
     reg <<- lm(f, data=data_)
     
@@ -2951,8 +2490,9 @@ output$pred_worst_deals <- renderTable({
     
 output$pred_plot <- renderPlot({
     loading(input$pred_sel_city)
-    
-    selection_check(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
+  dataframe_length_check_reg()
+  
+    selection_check_reg(list(input$pred_sel_three_variables, input$pred_sel_three_variables_factor, 
                        split_interaction_terms(input$pred_sel_interaction_terms)))
   
     interaction_terms <- split_interaction_terms(input$pred_sel_interaction_terms)
@@ -2966,7 +2506,7 @@ output$pred_plot <- renderPlot({
     
     data_ <- Filter(function(x)(length(unique(x))>1), data_)
     
-    data_ <- Nh_basing(data_)
+    data_ <- District_basing(data_)
     
     if(length(interaction_terms) == 0){
       interaction_terms <- c()
@@ -3000,13 +2540,12 @@ output$pred_plot <- renderPlot({
         geom_point(aes(color = deal_type,
                        fill = deal_type,
                        size = deal_type),
-                   alpha = 0.9,
+                   alpha = 0.7,
                    # size = 3,
-                   show_legend = T,
-                   shape = 1) +
+                   show_legend = T) +
         geom_smooth(method = "lm", formula = y ~ x, color = color[4], se = F) +
       # scale_alpha_manual(values=c(0.3, 1, 1)) +
-      
+    
         # scale_color_manual(values = c(color[1], color[2], color[3])) +
         ggtitle(paste("Predictions vs actuals")) +
         ylab(input$pred_sel_dependent) +
@@ -3033,7 +2572,8 @@ output$pred_plot <- renderPlot({
 
 output$pred_nrows <- renderUI({
     loading(input$pred_sel_city)
-    
+  dataframe_length_check_reg()
+  
     data_ <- reactive_data_reg() %>% filter(city == input$pred_sel_city & date == input$pred_sel_date) %>% 
         select(c(c("city"), input$pred_sel_three_variables, input$pred_sel_three_variables_factor, input$pred_sel_dependent)) %>%
         drop_na() %>%
@@ -3058,9 +2598,9 @@ output$about <- renderUI({
     <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">About the project</span></p>
 <p><br></p>
 <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">This is an&nbsp;</span><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">interactive data visualization and analysis tool&nbsp;</span><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">based running on Shiny, an environment developed by RStudio. As you make click, there is an R script in the bac</span></p>
-<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">kground running, calculating numbers, making plots. If interested, you may check out the code HERE (link to be added).&nbsp;</span></p>
+<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">kground running, calculating numbers, making plots. If interested, you may check out the code in the next panel.&nbsp;</span></p>
 <p><br></p>
-<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Created by&nbsp;</span><a href="https://www.linkedin.com/in/benedek-pasztor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Benedek P&aacute;sztor</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">,&nbsp;</span><a href="https://www.linkedin.com/in/bekesgabor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor B&eacute;k&eacute;s&nbsp;</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">and&nbsp;</span><a href="https://www.linkedin.com/in/gabor-kezdi-28951640/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor K&eacute;zdi.&nbsp;</span></a><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">P&aacute;sztor is a senior data scientist at Utopus Insights, a consultancy. B&eacute;k&eacute;s is Assistant Prof at CEU in Vienna, Austria, K&eacute;zdi is associate research professor at the University of Micigan in Ann Arbor, USA.&nbsp;</span><a href="https://gabors-data-analysis.com/authors/" style="text-decoration:none;"><span style="font-size: 11pt; font-family: Arial; color: rgb(17, 85, 204); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: underline; text-decoration-skip-ink: none; vertical-align: baseline; white-space: pre-wrap;">More about us.</span></a></p>
+<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Created by&nbsp;</span><a href="https://www.linkedin.com/in/benedek-pasztor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Benedek P&aacute;sztor</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">,&nbsp;</span><a href="https://www.linkedin.com/in/bekesgabor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor B&eacute;k&eacute;s&nbsp;</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">and&nbsp;</span><a href="https://www.linkedin.com/in/gabor-kezdi-28951640/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor K&eacute;zdi.&nbsp;</span></a><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">P&aacute;sztor is a data scientist at Utopus Insights, a consultancy. B&eacute;k&eacute;s is Assistant Prof at CEU in Vienna, Austria, K&eacute;zdi is associate research professor at the University of Micigan in Ann Arbor, USA.&nbsp;</span><a href="https://gabors-data-analysis.com/authors/" style="text-decoration:none;"><span style="font-size: 11pt; font-family: Arial; color: rgb(17, 85, 204); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: underline; text-decoration-skip-ink: none; vertical-align: baseline; white-space: pre-wrap;">More about us.</span></a></p>
 <p><br></p>
 <p><br></p>
 <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">This is&nbsp;</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">version 0.3.</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">&nbsp;(2020-02-22)</span></p>
@@ -3096,18 +2636,15 @@ output$footnote <- renderUI({
          by the  <a href = 'https://emba.ceu.edu/'> CEU Executive MBA </a>")
     
 })
-# 
-# output$variable_description <- renderUI({'<p dir="ltr" style="line-height:1.38;background-color:#ffffff;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Numeric variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">: Price&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is USD price for a night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is from city center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance_alter</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">&nbsp;is distance from alternative center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">rating&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is average user rating,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">N_rating_review&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the count of user ratings on the website,&nbsp;</span></p>
-# <p><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Categorical variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">:&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">stars&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the number of stars for the hotel (3.5 means ***+),&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">offer cat&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is various offer rates for the night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">accommodation_type&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is type of room,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">city_actual&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is binary (city_actual &nbsp;== city), 1 if hotel is in the city, 0 if satellite village,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">neighboorhood&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is city part as defined by city.&nbsp;</span></p>'})
-
 
 
 output$variable_description <- renderUI({
 
     HTML(paste0("<div style='background-color:", background_hex,"'>",
-'<p dir="ltr" style="line-height: 1.5; background-color: rgb(242, 230, 217); margin-top: 0pt; margin-bottom: 0pt;"><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap; background-color: rgb(242, 230, 217);">Variable info:&nbsp;</span></p>
-<p dir="ltr" style="line-height: 1; background-color: rgb(242, 230, 217); margin-top: 0pt; margin-bottom: 0pt;"><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: underline; text-decoration-skip-ink: none; vertical-align: baseline; white-space: pre-wrap;background-color: rgb(242, 230, 217);">Numeric variables</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;background-color: rgb(242, 230, 217);">: Price&nbsp;</span><span style="background-color: rgb(242, 230, 217);"><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is USD price for a night,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">distance&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is from city center in km,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">distance_alter</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">&nbsp;is distance from alternative center in km,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">rating&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is average user rating,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">N_rating_review&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is the count of user ratings on the website,&nbsp;</span></span></p>
-<p dir="ltr" style="line-height: 1; background-color: rgb(242, 230, 217); margin-top: 0pt; margin-bottom: 0pt;"><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: underline; text-decoration-skip-ink: none; vertical-align: baseline; white-space: pre-wrap;background-color: rgb(242, 230, 217);">Categorical variables</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;background-color: rgb(242, 230, 217);">:&nbsp;</span><span style="background-color: rgb(242, 230, 217);"><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">stars&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is the number of stars for the hotel (3.5 means ***+),&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">offer cat&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is various offer rates for the night,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">accommodation_type&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is type of room,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">city_actual&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">is binary (city_actual &nbsp;== city), 1 if hotel is in the city, 0 if satellite village,&nbsp;</span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">neighboorhood&nbsp;</span></span><span style="font-size: 12pt; font-family: Calibri, sans-serif; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap; background-color: rgb(242, 230, 217);">is city part as defined by city.&nbsp;</span></p>'))})
+                '<p dir="ltr" style="line-height:1.38;background-color: rgb(242, 230, 217);margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Variable info:&nbsp;</span></p>
+                  <p dir="ltr" style="line-height:1.38;background-color: rgb(242, 230, 217);margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Quantitative variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">: Price&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is USD price for a night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is from city center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">distance_alter</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">&nbsp;is distance from alternative center in km,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">rating&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is average user rating,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">N_rating_review&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the count of user ratings on the website,&nbsp;</span></p>
+                  <p dir="ltr" style="line-height:1.38;background-color: rgb(242, 230, 217);margin-top:0pt;margin-bottom:0pt;"><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:underline;-webkit-text-decoration-skip:none;text-decoration-skip-ink:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Categorical variables</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">:&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">stars&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is the number of stars for the hotel (3.5 means ***+),&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">offer cat&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is various offer rates for the night,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">accommodation_type&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is type of room,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">city_actual&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is binary (city_actual &nbsp;== city), 1 if hotel is in the city, 0 if satellite village,&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">neighboorhood&nbsp;</span><span style="font-size:12pt;font-family:Calibri,sans-serif;color:#000000;background-color: rgb(242, 230, 217);font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">is city part as defined by city.&nbsp;</span></p>
+                  <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Fine print</span><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">. Offer categories have been condensed. Apartment include cacation home and condos. Guest House/B&amp;B also includes Pension, Hotel includes inns and apartman-hotels. The data exclude other types of accommodation like boats, when star rating is below 2 or missing.&nbsp;</span></p>'))})
 
 
 output$source <- renderUI({
@@ -3123,4 +2660,46 @@ output$source <- renderUI({
     )
 })
 
+
+output$tab_description <- renderUI({
+  loading(input$filter_check)
+  
+  if(input$tabs == 'desc'){
+    text <- '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Describe a city</span></p>
+         <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">We show descriptive statistics for a single city and date. Sd is standard deviation, N_unique is the number of unique values for a categorical variable, top counts is a list of the most frequent values and their count.&nbsp;</span></p>'
+  }
+  else if(input$tabs == 'comp'){
+    text <-    '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Compare two cities</span></p>
+         <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">We show descriptive statistics for for two cities thus allowing for a comparison. Sd is standard deviation, N_unique is the number of unique values for a categorical variable, top counts is a list of the most frequent values and their count.&nbsp;</span></p>'
+      
+  }
+  else if(input$tabs == 'corr'){
+    text <-          '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Association (ex correlation)</span></p>
+         <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">We show patterns of association between two variables. In the first panel, we have two qualitative variables, a scatterplot and a regression line. In the second panel, we have a qualitative variable on the y axis, and a categorical variable on the x-axis, the boxplot shows the conditional mean, and the inter-quartile range.</span></p>'
+    
+  }
+  else if(input$tabs == 'reg'){
+    text <-          '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Multivariate regression</span></p>
+         <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Here we can estimate three different regressions for the same city and date. Estimated with OLS. Coefficients and the 95% confidence interval presented. Regarding categorical variables, the base for comparison are: Apartment type: hotel, Neighborhood: largest one, Offer_cat: no-offer, Stars: 3, city_actual =yes, stars=3stars. For quantitative variables, log values may also be selected.&nbsp;</span></p>'
+  }
+  else if(input$tabs == 'compreg'){
+    text <-          '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Compare regs</span></p>
+         <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Comparing regressions allows running the same regression on different samples, different cities or different dates. Estimated with OLS. Coefficients and the 95% confidence interval presented. Regarding categorical variables, the base for comparison are: Apartment type: hotel, Neighborhood: largest one, Offer_cat: no-offer, Stars: 3, city_actual =yes, stars=3stars. For quantitative variables, log values may also be selected.&nbsp;</span></p>'
+    
+  }
+  else if(input$tabs == 'pred'){
+    text <- '<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">Prediction</span></p>
+      <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;font-family:Arial;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">We estimate a single regression for a city and date. Use the model to show predicted values. This allows comparing observed and predicted values, as well as residuals - difference between predicted an actual values. Best and worst deals are defined by largest residuals: Best deals are when actual values is way lower than predicted.&nbsp;</span></p>'
+  }
+  else{text <- ""}
+  
+  
+  if (input$filter_check == 0){
+  HTML(paste0("<div style='background-color:", background_hex,"'>",
+              text))
+  }
+  else{HTML("")}
 })
+
+})
+  

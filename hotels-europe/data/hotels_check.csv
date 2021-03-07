@@ -1,0 +1,13 @@
+﻿hotel_id,price,offer,offer_cat,year,month,weekend,holiday,nnights,scarce_room,city,distance,stars,rating,country,city_actual,rating_reviewcount,center1label,center2label,neighbourhood,ratingta,ratingta_count,distance_alter,accommodation_type
+3130,102,1,1-15% offer,2018,1,1,0,1,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,83,1,15-50% offer,2017,12,0,1,1,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,72,1,15-50% offer,2018,3,1,0,1,1,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,59,1,1-15% offer,2017,11,1,0,1,1,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,96,1,15-50% offer,2018,5,1,0,1,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,48,1,1-15% offer,2017,11,0,0,1,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,66,1,15-50% offer,2018,2,1,0,1,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3130,461,1,15-50% offer,2017,12,0,1,4,0,Budapest,0.1,3,4.3,Hungary,Budapest,238,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4.5,74,0.2,Apartment
+3131,75,1,15-50% offer,2018,2,1,0,1,0,Budapest,0.2,4,3.9,Hungary,Budapest,710,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4,2538,0.1,Hotel
+3131,75,1,15-50% offer,2017,11,0,0,1,0,Budapest,0.2,4,3.9,Hungary,Budapest,710,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4,2538,0.1,Hotel
+3131,130,1,15-50% offer,2018,6,1,0,1,0,Budapest,0.2,4,3.9,Hungary,Budapest,710,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4,2538,0.1,Hotel
+3131,139,1,15-50% offer,2018,5,1,0,1,0,Budapest,0.2,4,3.9,Hungary,Budapest,710,City centre,Vaci Street,05. BelvÃƒÂ¡ros - LipÃƒÂ³tvÃƒÂ¡ros,4,2538,0.1,Hotel
