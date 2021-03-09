@@ -193,47 +193,70 @@ shinyServer(function(input, output, session) {
     }
     
    
+    selected_list <- list()
+    
+    
+    data_re <- reactive({
+      if(input$tabs == 'desc'){
+        loading(input$desc_sel_city)
+        data_ <- data %>% filter(city == input$desc_sel_city,
+                                 date == input$desc_sel_date)
+      }
+      else if(input$tabs == 'comp'){
+        loading(input$comp_sel_cities)
+        data_ <- data %>% filter(city %in% input$comp_sel_cities,
+                                 date == input$comp_sel_date)
+      }
+      else if(input$tabs == 'corr'){
+        loading(input$corr_sel_city)
+        data_ <- data %>% filter(city == input$corr_sel_city,
+                                 date == input$corr_sel_date)
+      }
+      else if(input$tabs == 'reg'){
+        loading(input$reg_sel_city)
+        data_ <- data_reg %>% filter(city == input$reg_sel_city,
+                                     date == input$reg_sel_date)
+      }
+      else if(input$tabs == 'compreg'){
+        loading(input$compreg_sel_city_A)
+        data_ <- data_reg %>% filter(city %in% c(input$compreg_sel_city_A, input$compreg_sel_city_B, input$compreg_sel_city_C),
+                                     date %in% c(input$compreg_sel_date_A, input$compreg_sel_date_B, input$compreg_sel_date_C))
+      }
+      else if(input$tabs == 'pred'){
+        loading(input$pred_sel_city)
+        data_ <- data_reg %>% filter(city == input$pred_sel_city,
+                                     date == input$pred_sel_date)
+      }
+      else{data_ <- data}
+      
+      
+      data_ <- data_ %>%
+        select(setdiff(names(data_), c("month", "year", "hotel_id", "",  "weekend",
+                                       "holiday", "city", "country", "offer", "ratingta", "ratingta_count", "date")))
+      data_
+    })
+    
+    # for (inputName in colnames(data_re()){
+    #   data_ <- data_re()
+    #   if(class(data[[column_name]]) != 'factor'){
+    #     selected_list[[inputName]] <<- c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T))
+    #   }
+    #   else{
+    #     selected_list[[inputName]] <<-  unique(as.character(data_[[column_name]]))
+    #   }
+    #   
+    # }
+    # data_re()
+    # 
+    # observe({
+    #   d.selected <<- input$d
+    # })
+    # 
     
     # Render the sliders
     output$filters <- renderUI({
-
+        data_ <- data_re()
         
-        if(input$tabs == 'desc'){
-            loading(input$desc_sel_city)
-            data_ <- data %>% filter(city == input$desc_sel_city,
-                                     date == input$desc_sel_date)
-        }
-        else if(input$tabs == 'comp'){
-            loading(input$comp_sel_cities)
-            data_ <- data %>% filter(city %in% input$comp_sel_cities,
-                                     date == input$comp_sel_date)
-        }
-        else if(input$tabs == 'corr'){
-            loading(input$corr_sel_city)
-            data_ <- data %>% filter(city == input$corr_sel_city,
-                                     date == input$corr_sel_date)
-        }
-        else if(input$tabs == 'reg'){
-            loading(input$reg_sel_city)
-            data_ <- data_reg %>% filter(city == input$reg_sel_city,
-                                     date == input$reg_sel_date)
-        }
-        else if(input$tabs == 'compreg'){
-            loading(input$compreg_sel_city_A)
-            data_ <- data_reg %>% filter(city %in% c(input$compreg_sel_city_A, input$compreg_sel_city_B, input$compreg_sel_city_C),
-                                     date %in% c(input$compreg_sel_date_A, input$compreg_sel_date_B, input$compreg_sel_date_C))
-        }
-        else if(input$tabs == 'pred'){
-            loading(input$pred_sel_city)
-            data_ <- data_reg %>% filter(city == input$pred_sel_city,
-                                     date == input$pred_sel_date)
-        }
-        else{data_ <- data}
-        
-        
-        data_ <- data_ %>%
-            select(setdiff(names(data_), c("month", "year", "hotel_id", "",  "weekend",
-                                          "holiday", "city", "country", "offer", "ratingta", "ratingta_count", "date")))
         
         xAxisGroup <- unique(names(data_))
         
@@ -242,22 +265,26 @@ shinyServer(function(input, output, session) {
             inputName <- paste0("filter_", xAxisGroup[i])
             column_name <- xAxisGroup[i]
             
+            
+            
             if(class(data[[column_name]]) != 'factor'){
+               selected_list[[inputName]] <<- c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T))
                 
                 inputpanel <- sliderInput(inputName,
                                           xAxisGroup[i],
                                           min=min(data_[column_name], na.rm = T),
                                           max=max(data_[column_name], na.rm = T),
-                                          value=c(min(data_[column_name], na.rm = T), max(data_[column_name], na.rm = T)))
+                                          value=selected_list[[inputName]])
             }
             else{
                 data_$stars <- ordered(data_$stars, levels = c("2", "2.5", "3", "3.5", "4", "4.5", "5") )
+                selected_list[[inputName]] <<-  unique(as.character(data_[[column_name]]))
                 
                 inputpanel <- pickerInput(inputName,
                                           label = xAxisGroup[i],
                                           choices = sort(unique(as.character(data_[[column_name]]))),
                                           multiple = TRUE,
-                                          selected = unique(as.character(data_[[column_name]])))
+                                          selected = selected_list[[inputName]])
             }
             
             return(conditionalPanel(condition = "input.filter_check == 1", inputpanel))
@@ -1249,7 +1276,7 @@ shinyServer(function(input, output, session) {
                         color = color[1],
                         fill = color[1])) +
             geom_point(size = 3,
-                          alpha = 0.7,
+                          alpha = 0.3,
                        show_legend = F) +
             scale_fill_manual(values=c(color[1], color[2], color[3])) +
             scale_color_manual(values = c(color[1], color[2], color[3])) +
@@ -1565,7 +1592,7 @@ output$reg_sel_interaction_terms_A <- renderUI({
     selectable_names <- interaction_terms
     
     pickerInput(inputId = "reg_sel_interaction_terms_A",
-                label = strong("Select interaction terms:"), selected = "",
+                label = "Select interaction terms:", selected = "",
                 choices = selectable_names)
 })
 
@@ -1573,7 +1600,7 @@ output$reg_sel_interaction_terms_B <- renderUI({
     selectable_names <- interaction_terms
     
     pickerInput(inputId = "reg_sel_interaction_terms_B",
-                label = strong("Select interaction terms:"), selected = "",
+                label = "Select interaction terms:", selected = "",
                 choices = selectable_names)
 })
 
@@ -1581,7 +1608,7 @@ output$reg_sel_interaction_terms_C <- renderUI({
     selectable_names <- interaction_terms
     
     pickerInput(inputId = "reg_sel_interaction_terms_C",
-                label = strong("Select interaction terms:"), selected = "",
+                label = "Select interaction terms:", selected = "",
                 choices = selectable_names)
 })
 
@@ -1883,7 +1910,7 @@ output$compreg_sel_interaction_terms <- renderUI({
     selectable_names <- interaction_terms
     
     pickerInput(inputId = "compreg_sel_interaction_terms",
-                label = strong("Select interaction terms:"), selected = "",
+                label = "Select interaction terms:", selected = "",
                 choices = selectable_names)
 })
 
@@ -2263,13 +2290,6 @@ output$pred_sel_dependent <- renderUI({
 })
 
 
-### Filter extreme values
-output$pred_filter_check <- renderUI({
-    checkboxInput("pred_filter_check",
-                  strong("Tick this if you would like to filter values"), 
-                  FALSE)
-})
-
 ### Pick three variables (default: price, distance, stars)
 output$pred_sel_three_variables <-renderUI({
     selectable_names <- setdiff(names(data_reg)[ifelse(sapply(reactive_data_reg(), is.factor) == F, T, F)], c("month", "year", "hotel_id", "",  input$pred_sel_dependent))
@@ -2298,7 +2318,7 @@ output$pred_sel_interaction_terms <- renderUI({
     selectable_names <- interaction_terms
     
     pickerInput(inputId = "pred_sel_interaction_terms",
-                label = strong("Select interaction terms:"), selected = "",
+                label = "Select interaction terms:", selected = "",
                 choices = selectable_names)
 })
 
@@ -2540,7 +2560,7 @@ output$pred_plot <- renderPlot({
         geom_point(aes(color = deal_type,
                        fill = deal_type,
                        size = deal_type),
-                   alpha = 0.7,
+                   alpha = 0.3,
                    # size = 3,
                    show_legend = T) +
         geom_smooth(method = "lm", formula = y ~ x, color = color[4], se = F) +
@@ -2603,7 +2623,7 @@ output$about <- renderUI({
 <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Created by&nbsp;</span><a href="https://www.linkedin.com/in/benedek-pasztor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">Benedek P&aacute;sztor</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">,&nbsp;</span><a href="https://www.linkedin.com/in/bekesgabor/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor B&eacute;k&eacute;s&nbsp;</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">and&nbsp;</span><a href="https://www.linkedin.com/in/gabor-kezdi-28951640/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">G&aacute;bor K&eacute;zdi.&nbsp;</span></a><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">P&aacute;sztor is a data scientist at Utopus Insights, a consultancy. B&eacute;k&eacute;s is Assistant Prof at CEU in Vienna, Austria, K&eacute;zdi is associate research professor at the University of Micigan in Ann Arbor, USA.&nbsp;</span><a href="https://gabors-data-analysis.com/authors/" style="text-decoration:none;"><span style="font-size: 11pt; font-family: Arial; color: rgb(17, 85, 204); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: underline; text-decoration-skip-ink: none; vertical-align: baseline; white-space: pre-wrap;">More about us.</span></a></p>
 <p><br></p>
 <p><br></p>
-<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">This is&nbsp;</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">version 0.3.</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">&nbsp;(2020-02-22)</span></p>
+<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 11pt; font-family: Arial; color: rgb(0, 0, 0); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">This is&nbsp;</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">version 0.4.</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">&nbsp;(2020-03-09)</span></p>
 <p><br></p>
 <p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">The application is based on the&nbsp;</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 700; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">textbook</span><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">&nbsp;B&eacute;k&eacute;s-K&eacute;zdi: Data Analysis for Business, Economics, and Policy, Cambridge University Press, 2021 April.&nbsp;</span><a href="http://gabors-data-analysis.com/" style="text-decoration:none;"><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 122, 183); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">http://gabors-data-analysis.com/</span></a><span style="font-size: 10.5pt; font-family: Arial; color: rgb(51, 51, 51); font-weight: 400; font-style: normal; font-variant: normal; text-decoration: none; vertical-align: baseline; white-space: pre-wrap;">.&nbsp;</span></p>
 <p><br></p>
