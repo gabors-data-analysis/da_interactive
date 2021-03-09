@@ -20,6 +20,7 @@ library(shinythemes)
 library(shinyWidgets)
 source("theme_bg.R")
 
+
 line_color <- '#3a5e8cFF'
 
 background_hex <- "#f2e6d9"
@@ -41,6 +42,8 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
             uiOutput("filters"),
             tags$hr(style=paste0("border-color:", line_color)), 
             uiOutput("tab_description"),
+            tags$hr(style=paste0("border-color:", line_color)), 
+            uiOutput("variable_description"),
             style='border-right: 1px solid #3a5e8cFF'            
         ),
         column(10,
@@ -286,18 +289,13 @@ shinyUI(fluidPage( theme = shinytheme("lumen"),
                         ),
         
             tags$hr(style=paste0("border-color:", line_color)),
-                       # tabPanel("About")
-            # 
-            htmlOutput("variable_description"),
-            tags$hr(style=paste0("border-color:", line_color)),
-            
+
                        fluidRow(column(12, align = "center", 
-                                       htmlOutput("footnote")))
+                                       htmlOutput("footnote"))))
                       
             # , width = '80%'
             
         
-    )
  )
 ))
 
