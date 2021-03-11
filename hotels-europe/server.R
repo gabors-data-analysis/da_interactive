@@ -108,19 +108,18 @@ selection_check_reg <- function(list_of_inputs){
     ))
 }
 
-
 ### DATA PREP OF THE ORIGINAL DATA -- saved as hotels_clean.csv
 # data <- read.csv(paste0('data/hotels.csv'), encoding = "UTF-8") %>%
 #   mutate(weekend_str = ifelse(weekend == 1, '_WEEKEND', '_WEEKDAY')) %>%
 #   # mutate(neighbourhood = as.factor(enc2utf8(as.character(neighbourhood)))) %>%
 #     mutate(date = as.factor(paste0(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"), weekend_str))) %>%
-#     mutate(date = factor(as.character(date), sort(levels(date)))) %>% 
-#   filter(nnights == 1) %>% 
+#     mutate(date = factor(as.character(date), sort(levels(date)))) %>%
+#   filter(nnights == 1) %>%
 #   # mutate(city_actual_2 = ifelse(city_actual  == TRUE, "Yes", "No")) %>%
 #   # mutate(city_actual = city_actual_2) %>%
 #     select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat,
 #            accommodation_type, city_actual, neighbourhood) %>%
-#     filter(stars >= 2) %>% 
+#     filter(stars >= 2) %>%
 #     mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
 #                                        "Apartment",
 #                                        ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Inn", "Apart-hotel", "Pension"),
@@ -149,8 +148,10 @@ selection_check_reg <- function(list_of_inputs){
 #                    "neighbourhood" = "District",
 #                    "accommodation_type" = "Type")) %>%
 # select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
-
+# 
 # data2 <- data %>% filter(date %in% c('2017-11-01_WEEKDAY', '2017-11-01_WEEKEND', '2017-12-01_WEEKDAY', '2018-12-01_WEEKEND', '2018-02-01_WEEKDAY', '2018-02-01_WEEKEND', '2018-06-01_WEEKDAY', '2018-06-01_WEEKEND'))
+# 
+# saveRDS(data2, 'data/hotels_clean.rds')
 # 
 # summary(data2$date)
 # write.table(data2, 'data/hotels_clean.csv', sep = ',', dec = '.', row.names = F)
@@ -158,7 +159,7 @@ selection_check_reg <- function(list_of_inputs){
 
 shinyServer(function(input, output, session) {
   
-    data <- read.csv('data/hotels_clean.csv') %>% 
+    data <- readRDS('data/hotels_clean.RDS') %>% 
       mutate(stars = as.factor(stars))
     
     
