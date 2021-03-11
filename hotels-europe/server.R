@@ -23,7 +23,7 @@ library(cowplot)
 library(modelsummary)
 library(stringr)
 # library(shinyWidgets)
-# library(shinyAce)
+library(shinyAce)
 library(plyr)
 library(stringi)
 
