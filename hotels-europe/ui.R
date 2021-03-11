@@ -6,16 +6,16 @@
 
 ########################################################################
 #
-# CEU "CEU DA Interactive Visualization
+# CEU DA Interactive Visualization
 # UI functions
 # Benedek PASZTOR
 #
 ########################################################################
 
 library(shiny)
-library(ggplot2)
-library(pander)
-library(plotly)
+# library(ggplot2)
+# library(pander)
+# library(plotly)
 library(shinythemes)
 library(shinyWidgets)
 source("theme_bg.R")

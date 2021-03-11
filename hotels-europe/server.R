@@ -7,7 +7,7 @@
 
 ########################################################################
 #
-# CEU "CEU DA Interactive Visualization
+# CEU DA Interactive Visualization
 # Server functions
 # Benedek PASZTOR
 #
@@ -18,12 +18,12 @@ library(tidyverse)
 library(plotly)
 library(lubridate)
 library(skimr)
-library(ggpubr)
+# library(ggpubr)
 library(cowplot)
 library(modelsummary)
 library(stringr)
-library(shinyWidgets)
-library(shinyAce)
+# library(shinyWidgets)
+# library(shinyAce)
 library(plyr)
 library(stringi)
 
@@ -109,45 +109,58 @@ selection_check_reg <- function(list_of_inputs){
 }
 
 
+### DATA PREP OF THE ORIGINAL DATA -- saved as hotels_clean.csv
+# data <- read.csv(paste0('data/hotels.csv'), encoding = "UTF-8") %>%
+#   mutate(weekend_str = ifelse(weekend == 1, '_WEEKEND', '_WEEKDAY')) %>%
+#   # mutate(neighbourhood = as.factor(enc2utf8(as.character(neighbourhood)))) %>%
+#     mutate(date = as.factor(paste0(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"), weekend_str))) %>%
+#     mutate(date = factor(as.character(date), sort(levels(date)))) %>% 
+#   filter(nnights == 1) %>% 
+#   # mutate(city_actual_2 = ifelse(city_actual  == TRUE, "Yes", "No")) %>%
+#   # mutate(city_actual = city_actual_2) %>%
+#     select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat,
+#            accommodation_type, city_actual, neighbourhood) %>%
+#     filter(stars >= 2) %>% 
+#     mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
+#                                        "Apartment",
+#                                        ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Inn", "Apart-hotel", "Pension"),
+#                                               "Guest House",
+#                                               ifelse(accommodation_type %in% c("Hotel"),
+#                                                      "Hotel",
+#                                               "Other"))),
+#            accommodation_type = as.factor(accommodation_type_2)) %>%
+#     select(-accommodation_type_2) %>%
+#     filter(accommodation_type %in% c("Hotel", "Guest House", "Apartment")) %>%
+#     mutate(rating = rating,
+#            stars = as.factor(stars)) %>%
+#     mutate(offer_cat =  str_extract(offer_cat, "[^ ]+")) %>%
+#     # mutate(offer_cat = as.factor(offer_cat)) %>%
+#     mutate(offer_cat = ifelse(is.na(offer_cat), '0%', offer_cat)) %>%
+#     mutate(offer_cat = ifelse(offer_cat %in% c("0%", "1-15%"), "Regular (base)",
+#                               ifelse(offer_cat %in% c("15-50%"), "Discount",
+#                                                       "Sale"))) %>%
+#     mutate(offer_cat = as.factor(offer_cat)) %>%
+#     mutate(city_actual = relevel(as.factor(ifelse(as.character(city_actual) == as.character(city), "Yes", "No")), "Yes")) %>%
+#     mutate(offer_cat = relevel(offer_cat, "Regular (base)"),
+#            accommodation_type = relevel(accommodation_type, "Hotel"),
+#            stars = as.factor(relevel(stars, 3))) %>%
+#     plyr::rename(c("rating_reviewcount" = "N_rating_review",
+#                    "offer_cat" = "Offer_Cat",
+#                    "neighbourhood" = "District",
+#                    "accommodation_type" = "Type")) %>%
+# select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
+
+# data2 <- data %>% filter(date %in% c('2017-11-01_WEEKDAY', '2017-11-01_WEEKEND', '2017-12-01_WEEKDAY', '2018-12-01_WEEKEND', '2018-02-01_WEEKDAY', '2018-02-01_WEEKEND', '2018-06-01_WEEKDAY', '2018-06-01_WEEKEND'))
+# 
+# summary(data2$date)
+# write.table(data2, 'data/hotels_clean.csv', sep = ',', dec = '.', row.names = F)
+
+
 shinyServer(function(input, output, session) {
-    data <- read.csv(paste0('data/hotels.csv'), encoding = "UTF-8") %>% 
-      mutate(weekend_str = ifelse(weekend == 1, '_WEEKEND', '_WEEKDAY')) %>% 
-      # mutate(neighbourhood = as.factor(enc2utf8(as.character(neighbourhood)))) %>% 
-        mutate(date = as.factor(paste0(strptime(paste0(year, '-', month, '-', 1), "%Y-%m-%d"), weekend_str))) %>%
-        mutate(date = factor(as.character(date), sort(levels(date)))) %>% 
-      # mutate(city_actual_2 = ifelse(city_actual  == TRUE, "Yes", "No")) %>%
-      # mutate(city_actual = city_actual_2) %>% 
-        select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat, 
-               accommodation_type, city_actual, neighbourhood) %>%
-        filter(stars >= 2) %>% 
-        mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
-                                           "Apartment",
-                                           ifelse(accommodation_type %in% c("Guest House", "Bed and breakfast", "Inn", "Apart-hotel", "Pension"),
-                                                  "Guest House",
-                                                  ifelse(accommodation_type %in% c("Hotel"),
-                                                         "Hotel",
-                                                  "Other"))),
-               accommodation_type = as.factor(accommodation_type_2)) %>%
-        select(-accommodation_type_2) %>% 
-        filter(accommodation_type %in% c("Hotel", "Guest House", "Apartment")) %>%
-        mutate(rating = rating,
-               stars = as.factor(stars)) %>%
-        mutate(offer_cat =  str_extract(offer_cat, "[^ ]+")) %>%
-        # mutate(offer_cat = as.factor(offer_cat)) %>%
-        mutate(offer_cat = ifelse(is.na(offer_cat), '0%', offer_cat)) %>%
-        mutate(offer_cat = ifelse(offer_cat %in% c("0%", "1-15%"), "Regular (base)",
-                                  ifelse(offer_cat %in% c("15-50%"), "Discount",
-                                                          "Sale"))) %>%
-        mutate(offer_cat = as.factor(offer_cat)) %>%
-        mutate(city_actual = relevel(as.factor(ifelse(as.character(city_actual) == as.character(city), "Yes", "No")), "Yes")) %>%
-        mutate(offer_cat = relevel(offer_cat, "Regular (base)"),
-               accommodation_type = relevel(accommodation_type, "Hotel"),
-               stars = as.factor(relevel(stars, 3))) %>% 
-        plyr::rename(c("rating_reviewcount" = "N_rating_review",
-                       "offer_cat" = "Offer_Cat",
-                       "neighbourhood" = "District",
-                       "accommodation_type" = "Type")) %>%
-        select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
+  
+    data <- read.csv('data/hotels_clean.csv') %>% 
+      mutate(stars = as.factor(stars))
+    
     
     data_reg <- data %>% mutate(ln_price = log(price),
                                 ln_distance = log(distance),
@@ -158,10 +171,6 @@ shinyServer(function(input, output, session) {
              ln_N_rating_review = round(ifelse(ln_N_rating_review %in% c(-Inf, Inf), 0, ifelse(is.na(ln_N_rating_review), 0, ln_N_rating_review)), digits = 1)) 
     
 
-    # data %>% filter(city == 'Budapest')
-    # x <- lapply(codepages, function(enc) try(read.table("data/hotels_check.csv",
-    #                                                     fileEncoding=enc,
-    #                                                     nrows=3, header=TRUE, sep=","))) # you get lots of errors/warning here
     
     dataframe_length_check <- function(){
       return(
@@ -598,7 +607,7 @@ shinyServer(function(input, output, session) {
       }
       else{
     
-      data_c <- data %>% 
+      data_c <- reactive_data() %>% 
         filter(city == input$desc_sel_city & date == input$desc_sel_date) %>% 
         select(city, District)
       color_vector <- c(color[2], color[3], color[4])
@@ -1396,7 +1405,7 @@ shinyServer(function(input, output, session) {
         r2 <- cor(data_[[y]], predict(reg))^2
     
         
-        HTML(paste0("<h3> R2: </h3> <b> <h2> ", round(r2, digits = 8), "</b> </h2>"))
+        HTML(paste0("<h3> R squared: <b> ", round(r2, digits = 2), "</b> </h3>"))
         
         })
  
@@ -1440,7 +1449,7 @@ shinyServer(function(input, output, session) {
       r2 <- cor(data_[[y]], predict(reg))^2
       
       
-      HTML(paste0("<h3> R2: </h3> <b> <h2> ", round(r2, digits = 8), "</b> </h2>"))
+      HTML(paste0("<h3> R squared: <b> ", round(r2, digits = 2), "</b> </h3>"))
       
     })
     
@@ -2551,8 +2560,8 @@ output$pred_plot <- renderPlot({
     data_$worstdeals <- ifelse(data_$resid %in% tail(sort(data_$resid, decreasing=FALSE),5),TRUE,FALSE)
     data_$bestdeals <- ifelse(data_$resid %in% tail(sort(data_$resid, decreasing=TRUE),5),TRUE,FALSE)
     
-    data_ <- data_ %>% mutate(deal_type = ifelse(worstdeals == T, 'Amongst worst deals', ifelse(bestdeals == T, 'Amongst best deals',
-                              'Amongst regular deals')))
+    data_ <- data_ %>% mutate(deal_type = ifelse(worstdeals == T, 'The 5 worst deals', ifelse(bestdeals == T, 'The 5 best deals',
+                              'Not extreme')))
     
     
     p <- data_ %>% ggplot(aes(x = prediction,
@@ -2576,12 +2585,12 @@ output$pred_plot <- renderPlot({
       theme(aspect.ratio = 1) +
       
         theme(plot.background=element_rect(fill=background_hex)) +
-      scale_fill_manual(values=c("Amongst regular deals" = background_hex, "Amongst best deals" =  color[2], 
-                                 "Amongst worst deals" = color[3])) +
-      scale_color_manual(values=c("Amongst regular deals" = color[1], "Amongst best deals" =  color[2], 
-                                  "Amongst worst deals" = color[3])) +
-      scale_size_manual(values = c("Amongst regular deals" = 2, "Amongst best deals" =  4,
-      "Amongst worst deals" = 4))
+      scale_fill_manual(values=c("Not extreme" = background_hex, "The 5 best deals" =  color[2], 
+                                 "The 5 worst deals" = color[3])) +
+      scale_color_manual(values=c("Not extreme" = color[1], "The 5 best deals" =  color[2], 
+                                  "The 5 worst deals" = color[3])) +
+      scale_size_manual(values = c("Not extreme" = 2, "The 5 best deals" =  4,
+      "The 5 worst deals" = 4))
       
     
     return(p)
