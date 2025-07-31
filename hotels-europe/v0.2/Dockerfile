@@ -17,7 +17,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # not available as binary pkg
-RUN install2.r --skipinstalled modelsummary shinyWidgets shinyBS
+RUN install2.r --skipinstalled modelsummary shinyWidgets shinyBS shinyAce
 
 WORKDIR /app
 COPY server.R ui.R theme_bg.R ./
