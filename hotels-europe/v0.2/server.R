@@ -111,6 +111,7 @@ selection_check_reg <- function(list_of_inputs){
 }
 
 # ## DATA PREP OF THE ORIGINAL DATA -- saved as hotels_clean.csv
+# source("helper_functions.R")
 # data <- read.csv(paste0('data/hotels.csv'), encoding = "UTF-8") %>%
 #   mutate(weekend_str = ifelse(weekend == 1, '_WEEKEND', '_WEEKDAY')) %>%
 #   # mutate(neighbourhood = as.factor(enc2utf8(as.character(neighbourhood)))) %>%
