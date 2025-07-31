@@ -119,7 +119,7 @@ selection_check_reg <- function(list_of_inputs){
 #   filter(nnights == 1) %>%
 #   # mutate(city_actual_2 = ifelse(city_actual  == TRUE, "Yes", "No")) %>%
 #   # mutate(city_actual = city_actual_2) %>%
-#     select(date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat,
+#     select(hotel_id, date, city, price, distance, distance_alter, rating_reviewcount, rating, stars, offer_cat,
 #            accommodation_type, city_actual, neighbourhood) %>%
 #     filter(stars >= 2) %>%
 #     mutate(accommodation_type_2 = ifelse(accommodation_type %in% c("Apartment", "Vacation home Condo"),
@@ -150,18 +150,13 @@ selection_check_reg <- function(list_of_inputs){
 #                    "neighbourhood" = "District",
 #                    "accommodation_type" = "Type")) %>%
 # select(sapply(., class) %>% .[order(match(., my.order))] %>% names)
-# 
 # data2 <- data %>% filter(date %in% c('2017-11-01_WEEKDAY', '2017-11-01_WEEKEND', '2017-12-01_WEEKDAY', '2018-12-01_WEEKEND', '2018-02-01_WEEKDAY', '2018-02-01_WEEKEND', '2018-06-01_WEEKDAY', '2018-06-01_WEEKEND'))
-# 
 # saveRDS(data2, 'data/hotels_clean.rds')
-# 
-# summary(data2$date)
-# write.table(data2, 'data/hotels_clean.csv', sep = ',', dec = '.', row.names = F)
 
 
 shinyServer(function(input, output, session) {
   
-    data <- readRDS('data/hotels_clean_new.RDS', refhook = NULL) %>% 
+    data <- readRDS('data/hotels_clean.rds', refhook = NULL) %>% 
       as.data.frame() %>%
       mutate(stars = as.factor(stars)) %>%
       mutate(hotel_id = as.factor(hotel_id)) %>%
