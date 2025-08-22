@@ -1,0 +1,36 @@
+body {
+	background-color: #C2DEDE;
+	font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", "Helvetica Neue", "Lucida Grande", Arial, sans-serif;
+	color: #233854;
+}
+
+a {
+	color: #541352;
+}
+
+.navbar {
+	background-color: #C2DEDE;
+	border-color: #EBEFF4;
+}
+
+.list-group .list-group-item {
+	background-color: #C2DEDE;
+	color: #233854;
+}
+
+.list-group-item {
+	background-color: #C2DEDE;
+	border-color: #EBEFF4;
+}
+
+.navbar-inverse .navbar-brand {
+	color: #57799D;
+}
+
+.app-list-title {
+	font-weight: bold;
+}
+
+.list-group-item:hover {
+	background-color: #00000022;
+}
