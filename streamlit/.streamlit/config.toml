@@ -1,0 +1,47 @@
+[server]
+
+enableStaticServing = true
+
+[[theme.fontFaces]]
+family = "Segoe UI"
+url = "app/static/segoeui.ttf"
+style = "normal"
+weight = "400"
+
+[[theme.fontFaces]]
+family = "Segoe UI"
+url = "app/static/segoeuii.ttf"
+style = "italic"
+weight = "400"
+
+[[theme.fontFaces]]
+family = "Segoe UI"
+url = "app/static/segoeuib.ttf"
+style = "normal"
+weight = "700"
+
+[theme]
+
+base = "light"
+primaryColor = "#3a5e8c"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#c2dede"
+textColor = "#000000"
+borderColor = "#233854"
+dataframeBorderColor = "#233854"
+dataframeHeaderBackgroundColor = "#c2dede"
+showWidgetBorder = false
+
+font = "Segoe UI"
+codeFont = "monospace"
+
+[theme.sidebar]
+
+backgroundColor = "#c2dede"
+secondaryBackgroundColor = "#d4f4f4"
+textColor = "#233854"
+borderColor = "#233854"
+showWidgetBorder = false
+
+font = "Segoe UI"
+codeFont = "monospace"
