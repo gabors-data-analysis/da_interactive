@@ -6,9 +6,9 @@ import statsmodels.api as sm
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(layout="wide", page_title="Ch. 19: Confounders")
+st.set_page_config(layout="wide", page_title="Confounders")
 
-st.title("Chapter 19: Confounders and Bad Conditioners in Causal Inference")
+st.title("Confounders and Bad Conditioners in Causal Inference")
 
 st.markdown("""
 ## Introduction
@@ -169,6 +169,9 @@ st.sidebar.download_button(
     file_name="ch19_confounders_data.csv",
     mime="text/csv"
 )
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch19_confounders.py).')
+
 
 # Model controls
 st.subheader("Regression Models")

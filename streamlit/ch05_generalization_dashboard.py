@@ -18,8 +18,8 @@ def create_sample_frame(
 
     return sample_frame
 
-st.set_page_config(page_title='Ch. 5 - Generalzing from Data', layout="wide")
-st.title('Ch. 5 - Generalizing from Data')
+st.set_page_config(page_title='Generalzing from Data', layout="wide")
+st.title('Generalizing from Data')
 # Dashboard description
 st.markdown('''
 This dashboard illustrates the key concepts discussed in Chapter 5 about generalizing from data.
@@ -112,6 +112,7 @@ st.sidebar.download_button(
     file_name='ch05_generalization_sample_data.csv',
     mime='text/csv'
 )
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch05_generalization_dashboard.py).')
 
 # Visuals on population and sample
 col1, col2 = st.columns(2)

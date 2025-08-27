@@ -12,9 +12,9 @@ warnings.filterwarnings("ignore")
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title="Ch. 21 - Common Support", layout="wide")
+st.set_page_config(page_title="Common Support", layout="wide")
 
-st.title("Ch. 21 - Common Support")
+st.title("Common Support")
 
 st.markdown("""
 ### Introduction
@@ -256,6 +256,8 @@ st.sidebar.download_button(
     "ch21_common_support_data.csv",
     "text/csv"
 )
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch21_common_support.py).')
 
 # summary statistics
 st.subheader("Data Summary")

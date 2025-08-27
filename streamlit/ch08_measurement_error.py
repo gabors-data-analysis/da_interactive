@@ -8,8 +8,8 @@ import statsmodels.api as sm
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title='Ch. 8 - Measurement Error', layout="wide")
-st.title('Ch. 8 - Measurement Error')
+st.set_page_config(page_title='Measurement Error', layout="wide")
+st.title('Measurement Error')
 
 st.markdown(
 """
@@ -152,6 +152,8 @@ st.sidebar.download_button(
     file_name='ch08_measurement_error_data.csv',
     mime='text/csv',
 )
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch08_measurement_error.py).')
 
 # Filter out hotels with distance < 1 mile
 if filtersmall:

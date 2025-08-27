@@ -6,7 +6,7 @@ import seaborn as sns
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title='Ch. 3 - Visualizing Distributions', layout='wide')
+st.set_page_config(page_title='Visualizing Distributions', layout='wide')
 
 # load hotels-europe dataset from OSF and cache it
 @st.cache_data
@@ -26,7 +26,7 @@ def apply_filters(hotels_price, hotels_features, city, minprice, maxprice):
 
 hotels_price, hotels_features = load_data()
 
-st.title('Chapter 3: Visualizing Distributions')
+st.title('Visualizing Distributions')
 st.markdown("""
 Visualizing distributions is a crucial step in every analytical project.
 This dashboard focuses on various methods to visualize the distribution of hotel prices, including histograms, boxplots, density plots, and violin plots.
@@ -66,6 +66,7 @@ else:
         file_name='ch03_distribution_visuals_data.csv',
         mime='text/csv'
     )
+    st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch03_distribution_visuals.py).')
     col1, col2 = st.columns(2)
     with col1:
         # Histogram (either by number of bins or bin width set by the user)
