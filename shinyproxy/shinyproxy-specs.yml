@@ -2,35 +2,41 @@ proxy:
   specs:
     - id: hotels
       display-name: Linear Regression
-      description: Explore and practice concepts of exploratory and linear regression analysis using the <a href="https://osf.io/r6uqb" target="_blank">hotels-europe</a> dataset. Related textbook chapters: <a href="https://gabors-data-analysis.com/chapters/#chapter-03-exploratory-data-analysis" target="_blank">03</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-04-comparison-and-correlation" target="_blank">04</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-07-simple-regression" target="_blank">07</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-08-complicated-patterns-and-messy-data" target="_blank">08</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-09-generalizing-results-of-a-regression" target="_blank">09</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-10-multiple-linear-regression" target="_blank">10</a>.
+      description: |
+        Explore and practice concepts of exploratory and linear regression analysis using the <a href="https://osf.io/r6uqb" target="_blank">hotels-europe</a> dataset. Related textbook chapters: <a href="https://gabors-data-analysis.com/chapters/#chapter-03-exploratory-data-analysis" target="_blank">03</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-04-comparison-and-correlation" target="_blank">04</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-07-simple-regression" target="_blank">07</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-08-complicated-patterns-and-messy-data" target="_blank">08</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-09-generalizing-results-of-a-regression" target="_blank">09</a>, <a href="https://gabors-data-analysis.com/chapters/#chapter-10-multiple-linear-regression" target="_blank">10</a>.
       container-image: ghcr.io/daroczig/da_interactive/hotels-europe:sha-7061cf2
     - id: ch03_distribution_visuals
       display-name: Visualizing Distributions
-      description: Explore how different types of charts can be used to visualize distributions. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-03-exploratory-data-analysis" target="_blank">03</a>.
+      description: |
+        Explore how different types of charts can be used to visualize distributions. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-03-exploratory-data-analysis" target="_blank">03</a>.
       container-image: ghcr.io/gabors-data-analysis/da_interactive/gabors-interactive-streamlit:sha-321a392
       container-cmd: ["streamlit", "run", "ch03_distribution_visuals.py", "--server.port=8501", "--server.address=0.0.0.0"]
       port: 8501
     - id: ch05_generalization_dashboard
       display-name: Generalizing from Data
-      description: Explore how different methods can be used to calculate standard errors to generalize from a sample to the population or general pattern. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-05-generalizing-from-data" target="_blank">05</a>.
+      description: |
+        Explore how different methods can be used to calculate standard errors to generalize from a sample to the population or general pattern. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-05-generalizing-from-data" target="_blank">05</a>.
       container-image: ghcr.io/gabors-data-analysis/da_interactive/gabors-interactive-streamlit:sha-321a392
       container-cmd: ["streamlit", "run", "ch05_generalization_dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
       port: 8501
     - id: ch08_measurement_error
       display-name: Measurement Error
-      description: Explore the concept and different types of measurement error and its impact on regression analysis. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-08-complicated-patterns-and-messy-data" target="_blank">08</a>.
+      description: |
+        Explore the concept and different types of measurement error and its impact on regression analysis. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-08-complicated-patterns-and-messy-data" target="_blank">08</a>.
       container-image: ghcr.io/gabors-data-analysis/da_interactive/gabors-interactive-streamlit:sha-321a392
       container-cmd: ["streamlit", "run", "ch08_measurement_error.py", "--server.port=8501", "--server.address=0.0.0.0"]
       port: 8501
     - id: ch19_confounders
       display-name: Confounders and Bad Conditioners in Causal Inference
-      description: Explore how conditioning on different covariates can impact causal estimates. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-19-a-framework-for-causal-analysis" target="_blank">19</a>.
+      description: |
+        Explore how conditioning on different covariates can impact causal estimates. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-19-a-framework-for-causal-analysis" target="_blank">19</a>.
       container-image: ghcr.io/gabors-data-analysis/da_interactive/gabors-interactive-streamlit:sha-321a392
       container-cmd: ["streamlit", "run", "ch19_confounders.py", "--server.port=8501", "--server.address=0.0.0.0"]
       port: 8501
     - id: ch21_common_support
       display-name: Common Support
-      description: Explore the concept of common support and its implications in causal inference. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-21-regression-and-matching-with-observational-data" target="_blank">21</a>.
+      description: |
+        Explore the concept of common support and its implications in causal inference. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-21-regression-and-matching-with-observational-data" target="_blank">21</a>.
       container-image: ghcr.io/gabors-data-analysis/da_interactive/gabors-interactive-streamlit:sha-321a392
       container-cmd: ["streamlit", "run", "ch21_common_support.py", "--server.port=8501", "--server.address=0.0.0.0"]
       port: 8501
