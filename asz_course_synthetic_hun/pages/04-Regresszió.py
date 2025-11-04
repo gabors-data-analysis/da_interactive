@@ -7,11 +7,18 @@ import statsmodels.api as sm
 # ------------------------------------------------------
 # Beállítások
 # ------------------------------------------------------
-st.set_page_config(page_title="Növekedési regressziók — Vállalatok (szimulált)", layout="wide")
-st.title("Növekedési regressziók — 2019 keresztmetszet (szimulált)")
+if st.session_state['real_data'] == True:
+    st.set_page_config(page_title="Növekedési regressziók — Vállalatok", layout="wide")
+    st.title("Növekedési regressziók — 2019 keresztmetszet")
+else:
+    st.set_page_config(page_title="Növekedési regressziók — Vállalatok (szimulált)", layout="wide")
+    st.title("Növekedési regressziók — 2019 keresztmetszet (szimulált)")
+
+
+
 
 @st.cache_data
-def load_cs(path: str = "data/synthetic/sim_cs2019_by_nace2_withcats.parquet") -> pd.DataFrame:
+def load_cs(path: str = st.session_state['data_path']) -> pd.DataFrame:
     p = Path(path)
     if not p.exists():
         st.error(f"Fájl nem található: {p}")
@@ -56,10 +63,10 @@ lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
 lab_df["__code"] = pd.to_numeric(lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
                                  errors="coerce")
 lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
-industry_opts = ["Összes ágazat (ALL)"] + lab_df["label"].tolist()
+industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
 
 sel_industry = st.sidebar.selectbox("Ágazat", industry_opts, index=0)
-if sel_industry == "Összes ágazat (ALL)":
+if sel_industry == "Összes ágazat":
     d = df.copy()
 else:
     d = df[df["nace2_name_code"] == sel_industry].copy()
@@ -82,45 +89,26 @@ else:
 # ------------------------------------------------------
 outcome_labels = [
     "Relatív növekedés: (sales_lead - sales)/sales",
-    "Lognövekedés: ln(sales_lead) - ln(sales)"
+    "Lognövekedés: ln(sales_lead) - ln(sales)",
 ]
-outcome_choice = st.sidebar.selectbox("Kimenet", outcome_labels, index=1)
-outcome_idx = outcome_labels.index(outcome_choice)
+label_to_col = {
+    outcome_labels[0]: "sales_growth_perc",
+    outcome_labels[1]: "sales_growth_log_diff",
+}
 
-# „lead” változók meghatározása
-sales = d["sales_clean"] if "sales_clean" in d.columns else None
-sales_lead = None
-ln_sales = d["ln_sales"] if "ln_sales" in d.columns else None
-ln_sales_lead = None
+# Build choices only for outcomes that actually exist
+available = [lbl for lbl, col in label_to_col.items() if col in d.columns]
+if not available:
+    st.error(
+        "Hiányoznak az előre számolt kimenetek. "
+        "Kérlek futtasd a data generator-t (add_outcomes), hogy létrejöjjenek a kimeneti oszlopok."
+    )
+    st.stop()
 
-if "sales_lead_sim" in d.columns:
-    sales_lead = d["sales_lead_sim"].astype(float)
-if sales_lead is None and "sales22_lead2" in d.columns:
-    sales_lead = d["sales22_lead2"].astype(float)
+outcome_choice = st.sidebar.selectbox("Kimenet", available, index=min(1, len(available)-1))
+y_col = label_to_col[outcome_choice]
 
-if "ln_sales_lead_sim" in d.columns:
-    ln_sales_lead = d["ln_sales_lead_sim"].astype(float)
-if ln_sales_lead is None and "ln_sales22_lead2" in d.columns:
-    ln_sales_lead = d["ln_sales22_lead2"].astype(float)
-
-# Kimenet számítása
-y = None
-if outcome_idx == 0:  # Relatív növekedés
-    if sales is None or sales_lead is None:
-        st.error("A relatív növekedéshez szükséges a `sales_clean` és valamelyik lead (`sales_lead_sim` vagy `sales22_lead2`).")
-        st.stop()
-    base = sales.astype(float)
-    y = (sales_lead - base) / np.where(base != 0, base, np.nan)
-else:  # Lognövekedés
-    if ln_sales is None and sales is not None:
-        ln_sales = np.log(np.clip(sales.astype(float), 1e-9, None))
-    if ln_sales is None or ln_sales_lead is None:
-        st.error("A lognövekedéshez szükséges a `ln_sales` (vagy `sales_clean`) és valamelyik log lead (`ln_sales_lead_sim` vagy `ln_sales22_lead2`).")
-        st.stop()
-    y = ln_sales_lead - ln_sales
-
-# Kimenet tisztítása
-y = pd.to_numeric(y, errors="coerce").replace([np.inf, -np.inf], np.nan)
+y = d[y_col].astype(float)  # safe; NaN stays NaN
 
 # ------------------------------------------------------
 # Magyarázó változók (kis kategóriaszámú oszlopok → kategóriák; per-változó négyzet/log; interakciók)
