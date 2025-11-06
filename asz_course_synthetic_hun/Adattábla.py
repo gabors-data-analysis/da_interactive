@@ -10,7 +10,6 @@ st.set_page_config(page_title="Kezdőlap — Szimulált", layout="wide")
 st.session_state['real_data'] = False
 
 if st.session_state['real_data'] == True:
-    # Change this: 
     st.session_state['data_path'] = "real_data/balance_cross_section_2019.parquet"
 else:
     st.session_state['data_path'] = "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
@@ -32,7 +31,7 @@ HUN_TO_INTERNAL = {
 
 # ---------------------------- Felhasználói beállítások ----------------------------
 VARS_TO_SHOW = [
-    "row_id", "nace2_name_code",
+    "row_id", "year", "nace2_name_code",
     "sales_clean", "emp", "age",
     "pretax", "ereduzem", "export_value", "liabilities",
     "tanass_clean", "eszk", "persexp_clean", "ranyag", "jetok",
@@ -42,6 +41,7 @@ VARS_TO_SHOW = [
 
 DISPLAY_NAMES = {
     "row_id": "ID",
+    "year": "Év",
     "nace2_name_code": "Ágazat (NACE2)",
     "sales_clean": "Értékesítés (millió Ft)",
     "emp": "Foglalkoztatottak (fő)",
@@ -82,6 +82,9 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
 
     rows = []
     for i in range(n_rows):
+        # ---- Év (2010–2022) ----
+        year = int(rng.integers(2010, 2023))
+
         # ---- Alap skálák: millió Ft ----
         # Értékesítés (lehet 0 is)
         if rng.random() < 0.30:
@@ -103,45 +106,44 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
         # Kor
         age = int(rng.integers(1, 51))
 
-        # Kötelezettségek: 0.2–1.5 × sales + zaj (nem mehet negatívba)
+        # Kötelezettségek: 0.2–1.5 × sales + zaj
         liabilities = float(int(max(0, sales * rng.uniform(0.2, 1.5) + rng.normal(0, 200))))
 
-        # Összes eszköz: nagyjából sales 0.5–2.0× + kötelezettségek * kis súly
+        # Összes eszköz
         eszk = float(int(max(0, sales * rng.uniform(0.5, 2.0) + liabilities * rng.uniform(0.0, 0.5))))
 
-        # Tárgyi eszközök: az eszközök 10–70%-a
+        # Tárgyi eszközök
         tanass_clean = float(int(eszk * rng.uniform(0.10, 0.70)))
 
-        # Anyag jellegű ráfordítások: sales 30–85%-a (ha sales=0, kis véletlen)
+        # Anyag jellegű ráfordítások
         ranyag = float(int(max(0, sales * rng.uniform(0.30, 0.85) + (0 if sales > 0 else rng.uniform(0, 50)))))
 
-        # Személyi jellegű ráfordítások: sales 5–30%-a + kis zaj
+        # Személyi jellegű ráfordítások
         persexp_clean = float(int(max(0, sales * rng.uniform(0.05, 0.30) + rng.normal(0, 50))))
 
-        # EBIT (üzemi eredmény): sales * margin (−10%..+20%) − működési zaj
+        # EBIT (üzemi eredmény)
         op_margin = rng.uniform(-0.10, 0.20)
         ereduzem = float(int(sales * op_margin - rng.normal(0, 50)))
 
-        # Kamatköltség ≈ liabilities * kamat (2–8%) – durva közelítés
+        # Adózás előtti eredmény
         interest_exp = liabilities * rng.uniform(0.02, 0.08)
-        # Adózás előtti eredmény = EBIT − kamat + véletlen egyéb (−50..+50)
         pretax = float(int(ereduzem - interest_exp + rng.uniform(-50, 50)))
 
-        # Jegyzett tőke: eszköz 1–30%-a, alsó korlát 3 millió Ft
+        # Jegyzett tőke
         jetok = float(int(max(3, eszk * rng.uniform(0.01, 0.30))))
 
-        # Támogatás: ~40% kap; összeg 5–300 millió Ft, de nem több mint 30% sales
+        # Támogatás
         has_grant = int(rng.random() < 0.40)
         if has_grant:
             cap = max(5.0, sales * 0.30)
-            grant_value = float(int(min(cap, rng.lognormal(mean=3.5, sigma=1.0))))  # jobbra ferde eloszlás
+            grant_value = float(int(min(cap, rng.lognormal(mean=3.5, sigma=1.0))))
         else:
             grant_value = 0.0
 
         # Megye
         county = rng.choice(counties)
 
-        # Kilépés 2021-ig: alap ~8% esély, kicsit nagyobb veszteségeseknél és nagyon kicsiknél
+        # Kilépés 2021-ig (dummy)
         exit_prob = 0.08
         if sales < 50 or pretax < 0:
             exit_prob += 0.07
@@ -151,6 +153,7 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
 
         rows.append({
             "row_id": i + 1,
+            "year": year,
             "nace2_name_code": rng.choice(nace_opts),
             "sales_clean": sales,
             "emp": emp,
@@ -175,14 +178,14 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
 
     # Típusok rendezése
     d["emp"] = d["emp"].astype("Int64")
+    d["year"] = d["year"].astype("Int64")
     for c in [
         "sales_clean", "pretax", "ereduzem", "export_value", "liabilities",
         "tanass_clean", "eszk", "persexp_clean", "ranyag", "jetok", "grant_value"
     ]:
         d[c] = d[c].astype("float64")
 
-    # Kategóriák
-    d["has_grant"] = d["has_grant"].astype("Int64")   # hagyjuk 0/1-nek a táblában
+    d["has_grant"] = d["has_grant"].astype("Int64")
     d["exit_2021"] = d["exit_2021"].astype("Int64")
 
     return d
@@ -214,19 +217,16 @@ if not present_cols:
     st.warning("A megjelenítéshez kijelölt oszlopok egyike sem található az adatban. Mutatjuk az összes elérhető oszlopot.")
     present_cols = list(df.columns)
 
-# ---------------------------- 10 véletlen sor --------------------------
+# ---------------------------- 100 véletlen sor --------------------------
 if df.empty:
     st.warning("Az adatállomány üres.")
 else:
     n_show = len(df)
     sample_df = df[present_cols].sample(n=n_show, random_state=42).reset_index(drop=True)
 
-    # Egyszintű fejléc: csak a megjelenített nevek
     to_show = sample_df.rename(columns=lambda c: DISPLAY_NAMES.get(c, c))
 
     st.subheader("100 véletlen vállalat")
     st.dataframe(to_show, use_container_width=True, hide_index=True)
 
     st.caption("Tipp: Az oszlopok szélessége a fejléc szélén húzással állítható.")
-
-
