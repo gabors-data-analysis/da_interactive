@@ -214,13 +214,23 @@ if variable == 'Marital Status':
     variable = 'Marital_Status'
 
 if variable == 'Age':
-    loess_option = st.sidebar.checkbox('Use LOESS instead of linear regression', value=False)
+    loess_option = st.sidebar.checkbox('Use LOWESS instead of linear regression', value=False)
     if not loess_option:
         degree = st.sidebar.selectbox(
             'Select Degree of Polynomial for Age:', [1, 2, 3, 4], index=1
         )
 
 show_ci_option = st.sidebar.checkbox('Show 95% Confidence Intervals', value=True)
+
+st.sidebar.download_button(
+    label='Download CPS dataset',
+    data=st.session_state.cps.to_csv(index=False),
+    file_name='cps_earnings.csv',
+    mime='text/csv',
+    help='Note: The dataset has been preprocessed to include only relevant variables and observations, including the remapping of categorical variables.'
+)
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch10_visualizing_relationships.py).')
 
 if variable == 'Age':
     fig, ax = plt.subplots(figsize=(5, 3.5))

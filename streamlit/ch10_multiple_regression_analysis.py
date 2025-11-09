@@ -159,7 +159,7 @@ def get_summary_table(reg_list):
 
         # Add N and R² rows
         extra_rows = pd.DataFrame({
-            'summary': ['-------', round(reg.rsquared, 3)]
+            'summary': ['-------', str(round(reg.rsquared, 3))]
         }, index=['-------', 'R-squared'])
 
         # Combine
@@ -188,7 +188,8 @@ controls_model_2 = st.sidebar.multiselect(
 interactions_model_2 = st.sidebar.multiselect(
     'Select Interaction Terms for Model 2:',
     options=[c for c in controls_model_2 if c not in ['Age squared', 'Age cubed', 'Age quartic']],
-    default=['Age']
+    default=[],
+    help='Only those variables are available as interaction terms that have been selected as controls. When selecting Age as an interaction term, the model will include interactions with all previously selected age polynomial terms as well.'
 )
 
 st.sidebar.markdown('### Model 3 Specification')
@@ -199,8 +200,19 @@ controls_model_3 = st.sidebar.multiselect(
 interactions_model_3 = st.sidebar.multiselect(
     'Select Interaction Terms for Model 3:',
     options=[c for c in controls_model_3 if c not in ['Age squared', 'Age cubed', 'Age quartic']],
-    default=[]
+    default=[],
+    help='Only those variables are available as interaction terms that have been selected as controls. When selecting Age as an interaction term, the model will include interactions with all previously selected age polynomial terms as well.'
 )
+
+st.sidebar.download_button(
+    label='Download CPS dataset',
+    data=st.session_state.cps.to_csv(index=False),
+    file_name='cps_earnings.csv',
+    mime='text/csv',
+    help='Note: The dataset has been preprocessed to include only relevant variables and observations, including the remapping of categorical variables.'
+)
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch10_multiple_regression_analysis.py).')
 
 reg1 = smf.ols(formula='ln_wage ~ Female', data=st.session_state.cps).fit(cov_type='HC1')
 reg2 = smf.ols(formula=get_formula(controls_model_2, interactions_model_2), data=st.session_state.cps).fit(cov_type='HC1')

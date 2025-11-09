@@ -17,3 +17,13 @@ You can navigate between two sections using the sidebar:
 For categorical variables, see how wages differ across groups. For continuous variables, observe trends using linear regression or LOWESS smoothing.
 - **Multiple Regression Analysis**: Fit multiple linear regression models to the data and explore the differences in the results when controlling for different sets of variables and interaction terms.
 """)
+
+st.sidebar.download_button(
+    label='Download CPS dataset',
+    data=st.session_state.cps.to_csv(index=False),
+    file_name='cps_earnings.csv',
+    mime='text/csv',
+    help='Note: The dataset has been preprocessed to include only relevant variables and observations, including the remapping of categorical variables.'
+)
+
+st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch10_welcome_page.py).')
