@@ -6,7 +6,7 @@ import seaborn as sns
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title='Visualizing Distributions', layout='wide')
+st.set_page_config(page_title='Ch. 3 - Visualizing Distributions', layout='wide')
 
 # load hotels-europe dataset from OSF and cache it
 @st.cache_data
@@ -26,7 +26,7 @@ def apply_filters(hotels_price, hotels_features, city, minprice, maxprice):
 
 hotels_price, hotels_features = load_data()
 
-st.title('Visualizing Distributions')
+st.title('Chapter 3: Visualizing Distributions')
 st.markdown("""
 Visualizing distributions is a crucial step in every analytical project.
 This dashboard focuses on various methods to visualize the distribution of hotel prices, including histograms, boxplots, density plots, and violin plots.
@@ -42,14 +42,26 @@ The visualizations will update accordingly, allowing you to see how different se
 st.sidebar.header('Settings')
 st.sidebar.subheader('Data Selection')
 city = st.sidebar.selectbox('Select a city', hotels_features['city'].unique(), index=42)
-price_range = st.sidebar.slider('Select price range', min_value=int(hotels_price['price'].min()), max_value=int(hotels_price['price'].max()), value=(50, 500), step=1)
+min_city = int(pd.merge(hotels_features[hotels_features['city'] == city], hotels_price, on='hotel_id')['price'].min())
+max_city = int(pd.merge(hotels_features[hotels_features['city'] == city], hotels_price, on='hotel_id')['price'].max())
+price_range = st.sidebar.slider('Select price range (USD)',
+                                min_value=min_city,
+                                max_value=max_city,
+                                value=(min_city, max_city),
+                                step=1,
+                                help='Note: The price range slider dynamically adjusts based on the selected city to reflect the actual price range available in that city.')
 
 st.sidebar.subheader('Histogram Settings')
-bins = st.sidebar.slider('Number of bins', min_value=5, max_value=500, value=50, step=1,
-                         help='Number of bins to use for the histogram. The range of the data gets divided into this many equal-width bins. A higher number yields more detailed but potentially noisy histograms, while a lower number might hide some important details.')
-bin_width = st.sidebar.slider('Bin width', min_value=1, max_value=100, value=30, step=1,
-                              help='Width of each bin for the histogram. The bin width determines how much of the price range each bin covers. A smaller bin width can reveal more detail, while a larger bin width can smooth out fluctuations.')
 binning_option = st.sidebar.selectbox('Binning option to use', ['Number of bins', 'Bin width'], index=0)
+if binning_option == 'Number of bins':
+    bins = st.sidebar.slider('Number of bins', min_value=5, max_value=500, value=50, step=1,
+                            help='Number of bins to use for the histogram. The range of the data gets divided into this many equal-width bins. A higher number yields more detailed but potentially noisy histograms, while a lower number might hide some important details.')
+    bin_width = None
+else:
+    bin_width = st.sidebar.slider('Bin width', min_value=1, max_value=100, value=30, step=1,
+                                help='Width of each bin for the histogram. The bin width determines how much of the price range each bin covers. A smaller bin width can reveal more detail, while a larger bin width can smooth out fluctuations.')
+    bins = None
+
 st.sidebar.subheader('Density Plot Settings')
 bandwidth = st.sidebar.slider('Bandwidth', min_value=0.01, max_value=5.0, value=0.1, step=0.01,
                               help='The bandwidth parameter controls the smoothness of the density estimate. A smaller value results in a more detailed plot, while a larger value produces a smoother curve.')
@@ -67,6 +79,7 @@ else:
         mime='text/csv'
     )
     st.sidebar.markdown('Code hosted on [Github](https://github.com/gabors-data-analysis/da_interactive/blob/main/streamlit/ch03_distribution_visuals.py).')
+    st.markdown(f"**With the selected filters, the number of observations is: {len(workset)}.**")
     col1, col2 = st.columns(2)
     with col1:
         # Histogram (either by number of bins or bin width set by the user)
@@ -77,7 +90,7 @@ else:
         else:
             st.subheader(f'Histogram with Bin Width = {bin_width}')
             sns.histplot(workset['price'], binwidth=bin_width, kde=False, ax=ax, color=color[0], edgecolor='white', fill=True, alpha=1)
-        ax.set_xlabel('Price')
+        ax.set_xlabel('Price (USD)')
         ax.set_ylabel('Frequency')
         ax.spines[['top', 'right']].set_visible(False)
         plt.tight_layout()
@@ -87,7 +100,7 @@ else:
         st.subheader('Boxplot')
         fig, ax = plt.subplots()
         sns.boxplot(x=workset['price'], ax=ax, color=color[0], fill=True, linecolor='black')
-        ax.set_xlabel('Price')
+        ax.set_xlabel('Price (USD)')
         ax.spines[['top', 'right']].set_visible(False)
         plt.tight_layout()
         st.pyplot(fig)
@@ -97,7 +110,7 @@ else:
         st.subheader(f'Density Plot with Bandwidth = {bandwidth}')
         fig, ax = plt.subplots()
         sns.kdeplot(workset['price'], bw_method=bandwidth, ax=ax, color=color[0], fill=True, alpha=1)
-        ax.set_xlabel('Price')
+        ax.set_xlabel('Price (USD)')
         ax.set_ylabel('Density')
         ax.spines[['top', 'right']].set_visible(False)
         plt.tight_layout()
@@ -106,7 +119,7 @@ else:
         st.subheader(f'Violin Plot with Bandwidth = {bandwidth}')
         fig, ax = plt.subplots()
         sns.violinplot(x=workset['price'], ax=ax, bw_method=bandwidth, color=color[0], fill=True, linecolor='black')
-        ax.set_xlabel('Price')
+        ax.set_xlabel('Price (USD)')
         ax.spines[['top', 'right']].set_visible(False)
         plt.tight_layout()
         st.pyplot(fig)
