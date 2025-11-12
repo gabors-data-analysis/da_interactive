@@ -7,12 +7,14 @@ from pathlib import Path
 st.set_page_config(page_title="Kezdőlap — Szimulált", layout="wide")
 
 # ---------------------------- Beállítás ----------------------------
-st.session_state['real_data'] = False
+st.session_state['real_data'] = True
 
 if st.session_state['real_data'] == True:
     st.session_state['data_path'] = "real_data/balance_cross_section_2019.parquet"
 else:
     st.session_state['data_path'] = "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
+
+st.session_state['ts_data'] = "data/synthetic/grant_time_series.csv"
 
 # ---------------------------- Változónevek (HU -> belső) ----------------------------
 HUN_TO_INTERNAL = {
