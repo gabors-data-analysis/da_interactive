@@ -7,7 +7,7 @@ from pathlib import Path
 st.set_page_config(page_title="Kezdőlap — Szimulált", layout="wide")
 
 # ---------------------------- Beállítás ----------------------------
-st.session_state['real_data'] = True
+st.session_state['real_data'] = False
 
 if st.session_state['real_data'] == True:
     st.session_state['data_path'] = "real_data/balance_cross_section_2019.parquet"
