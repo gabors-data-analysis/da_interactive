@@ -2,6 +2,9 @@
 import os
 import sys
 import traceback
+import numpy as np
+import pandas as pd
+from pathlib import Path
 
 # Try to import GUI + data deps up front so we can show helpful messages
 try:
@@ -45,8 +48,51 @@ def infer_parquet_name(csv_path):
     name, _ext = os.path.splitext(base)
     return f"{name}.parquet"
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+
+COUNTY_PATH = DATA_DIR / "county_names_codes.xlsx"
+NACE2_PATH = DATA_DIR / "nace2_labels.xlsx"
+
+def repeat_cleaning(df, error_message=None):
+    try:
+        df = df.rename(columns={"id":"row_id",
+                            "teaor08_2d":"nace2",
+                            "export":"export_value",
+                            "rlk":"liabilities",
+                            "received_grant":"has_grant",
+                            "firm_exit":"exit"})
+        
+        df["ln_sales"] = np.log(np.clip(df["sales_clean"].astype(float), 1e-9, None))
+
+        df["age"] = 2019 - df["foundyear"]
+
+        df['has_export'] = df.apply(lambda x: 1 if x['export_value'] > 0 and  x['export_value'] != np.nan else 0, axis=1)
+
+        county_name_correspondances = pd.read_excel(COUNTY_PATH)
+        county_name_correspondances = county_name_correspondances.rename(columns={"CODE":"county","NAME":"county_name"})
+
+        df = df.merge(county_name_correspondances,how="left",on="county")
+
+        lab = pd.read_excel(NACE2_PATH)
+        lab["nace2"] = lab["nace2"].apply(str)
+        lab["nace2"] = lab["nace2"].str.extract(r"(\d+)", expand=False).fillna("").str.zfill(2).str[:2]
+
+        df['nace2'] = df['nace2'].astype('Int64').astype(str).str.zfill(2)
+
+        df = df.merge(lab, on="nace2", how="left")
+        df["nace2_name_code"] = df["name_hu"].fillna("NACE " + df["nace2"]) + " (" + df["nace2"] + ")"
+
+        return df
+
+    except Exception as e:
+        msg = error_message or "repeat_cleaning() failed, continuing without cleaning."
+        print(f"{msg} Error details: {e}")
+        return df
+
+
 def convert_csv_to_parquet(csv_path, out_dir, parquet_name=None):
-    import pandas as pd
+    
 
     if not parquet_name:
         parquet_name = infer_parquet_name(csv_path)
@@ -57,12 +103,16 @@ def convert_csv_to_parquet(csv_path, out_dir, parquet_name=None):
     # For older pandas versions, you could set sep=None and engine="python".
     try:
         df = pd.read_csv(csv_path)
+
+
     except Exception as e:
         # Try a fallback with more permissive parser if needed
         try:
             df = pd.read_csv(csv_path, sep=None, engine="python")
         except Exception:
             raise e
+
+    df = repeat_cleaning(df)
 
     # Write Parquet (compression='snappy' is common; change if desired)
     df.to_parquet(out_path, index=False)  # uses pyarrow by default if installed
