@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-from matplotlib.ticker import FuncFormatter
+from matplotlib.ticker import FuncFormatter, LogLocator
 
 # Optional for LOWESS
 try:
@@ -46,7 +46,7 @@ else:
     st.title('Pontdiagram — 2019 keresztmetszet (szimulált)')
 
 st.markdown("Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. A pénzügyi adatok **millió forintban** szerepelnek.")
-
+# st.write(st.session_state["data_path"])
 # ----------------------- Oldalsáv ---------------------------
 st.sidebar.header("Beállítások")
 
@@ -115,11 +115,20 @@ x_filter = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, i
 # x_low_manual, x_high_manual = 2.0, 98.0
 # y_low_manual, y_high_manual = 2.0, 98.0
 
+df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
+df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
+
+# pénzügyiek ezres megjelenítés (millió Ft -> ezer millió? Itt marad, ahogy nálad volt: /1000)
+if x_is_monetary:
+    df[xvar] = df[xvar] / 1000.0
+if y_is_monetary:
+    df[yvar] = df[yvar] / 1000.0
+
 if x_filter == "Kézi minimum/maximum":
     st.sidebar.markdown("**Kézi határok (a megjelenített egységben)**")
     # sensible defaults: current min/max of x
-    current_min = float(np.nanmin(xvar))
-    current_max = float(np.nanmax(xvar))
+    current_min = float(np.nanmin(df[xvar]))
+    current_max = float(np.nanmax(df[xvar]))
     x_low_manual = st.sidebar.number_input("Minimum", value=current_min, step=(current_max - current_min)/100 if current_max > current_min else 1.0)
     x_high_manual = st.sidebar.number_input("Maximum", value=current_max, step=(current_max - current_min)/100 if current_max > current_min else 1.0)
     if x_low_manual > x_high_manual:
@@ -155,14 +164,7 @@ logx = st.sidebar.checkbox("Logaritmikus skála X", value=False)
 logy = st.sidebar.checkbox("Logaritmikus skála Y", value=False)
 
 # ----------------------- Szűrés és előkészítés ---------------------
-df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
-df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
 
-# pénzügyiek ezres megjelenítés (millió Ft -> ezer millió? Itt marad, ahogy nálad volt: /1000)
-if x_is_monetary:
-    df[xvar] = df[xvar] / 1000.0
-if y_is_monetary:
-    df[yvar] = df[yvar] / 1000.0
 
 # Log-hoz csak pozitívak maradnak
 if logx:
@@ -212,16 +214,16 @@ if plot_df.empty:
 
 # ----------------------- Transzformációk (fit a transzformált térben) -----------------------
 def fwd_x(v):
-    return np.log10(v) if logx else v
+    return np.log(v) if logx else v
 
 def inv_x(v):
-    return (10 ** v) if logx else v
+    return (np.exp(v)) if logx else v
 
 def fwd_y(v):
-    return np.log10(v) if logy else v
+    return np.log(v) if logy else v
 
 def inv_y(v):
-    return (10 ** v) if logy else v
+    return (np.exp(v)) if logy else v
 
 # ----------------------- Ábra -----------------------------
 fig, ax = plt.subplots()
@@ -253,20 +255,20 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
         a, b = coef[1], coef[0]
         # Megnevezés jelzi, melyik tengely(ek) logban vannak
         trafo_note = []
-        if logy: trafo_note.append("log10(y)")
+        if logy: trafo_note.append("ln(y)")
         else:    trafo_note.append("y")
-        if logx: xname = "log10(x)"
+        if logx: xname = "ln(x)"
         else:    xname = "x"
         coef_text = f"{fit_type}: {trafo_note[0]} = {a:.4g} + {b:.4g}·{xname}"
     elif deg == 2:
         a, b, c = coef[2], coef[1], coef[0]
-        xname = "log10(x)" if logx else "x"
-        yname = "log10(y)" if logy else "y"
+        xname = "ln(x)" if logx else "x"
+        yname = "ln(y)" if logy else "y"
         coef_text = f"{fit_type}: {yname} = {a:.4g} + {b:.4g}·{xname} + {c:.4g}·{xname}²"
     else:
         a, b, c, d = coef[3], coef[2], coef[1], coef[0]
-        xname = "log10(x)" if logx else "x"
-        yname = "log10(y)" if logy else "y"
+        xname = "ln(x)" if logx else "x"
+        yname = "ln(y)" if logy else "y"
         coef_text = f"{fit_type}: {yname} = {a:.4g} + {b:.4g}·{xname} + {c:.4g}·{xname}² + {d:.4g}·{xname}³"
 
 elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
@@ -300,15 +302,42 @@ elif fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
 ax.set_xlabel(x_label); ax.set_ylabel(y_label)
 ax.spines[['top', 'right']].set_visible(False)
 
-ax.ticklabel_format(style='plain', axis='x')
-ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}" if x_is_monetary else f"{v:,.0f}"))
+# --- X axis ---
+if logx:
+    # log scale with base e
+    ax.set_xscale('log', base=np.e)
+    ax.xaxis.set_major_locator(LogLocator(base=np.e))
+
+    # show ln(x) as tick labels
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda v, _: f"{np.log(v):.2f}")  # ln(v)
+    )
+else:
+    ax.ticklabel_format(style='plain', axis='x')
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda v, _: f"{v:,.2f}" if x_is_monetary else f"{v:,.0f}")
+    )
+
 ax.tick_params(axis='x', labelrotation=25)
-ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.0f}"))
+
+# --- Y axis ---
+if logy:
+    ax.set_yscale('log', base=np.e)
+    ax.yaxis.set_major_locator(LogLocator(base=np.e))
+
+    # show ln(y) as tick labels
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda v, _: f"{np.log(v):.2f}")
+    )
+else:
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.0f}")
+    )
 
 if logx:
-    ax.set_xscale('log')
+    ax.set_xlabel(f"ln({x_label})")
 if logy:
-    ax.set_yscale('log')
+    ax.set_ylabel(f"ln({y_label})")
 
 if fit_type != "Nincs":
     ax.legend(frameon=False)
