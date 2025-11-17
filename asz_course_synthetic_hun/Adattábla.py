@@ -4,6 +4,7 @@ import atexit
 from os import environ, path
 from shutil import rmtree
 from tempfile import mkdtemp
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -15,9 +16,16 @@ import streamlit as st
 st.set_page_config(page_title="Kezdőlap — Szimulált", layout="wide")
 
 # ---------------------------- Beállítás ----------------------------
+
 st.session_state["real_data"] = False
-st.session_state["data_path"] = "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
+BASE_DIR = Path(__file__).resolve().parent
+st.session_state["data_path"] = BASE_DIR / "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
+
+# Just for testing: 
+# st.session_state["data_path"] ="C:/Users/Barabás Dániel/work/balance_cross_section2019_to_export.parquet"
 st.session_state["ts_data"] = "data/synthetic/grant_time_series.csv"
+
+
 
 # temp folder for storing downloaded files
 temp_dir = mkdtemp()
