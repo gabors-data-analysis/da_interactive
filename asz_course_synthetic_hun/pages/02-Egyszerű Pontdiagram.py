@@ -37,6 +37,7 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
     df["nace2_name_code"] = df["nace2_name_code"].astype(str)
     return df
 
+
 cs = load_cross_section()
 
 # ----------------------- UI: fejlécek ------------------------
@@ -45,14 +46,18 @@ if st.session_state['real_data'] == True:
 else:
     st.title('Pontdiagram — 2019 keresztmetszet (szimulált)')
 
-st.markdown("Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. A pénzügyi adatok **millió forintban** szerepelnek.")
-# st.write(st.session_state["data_path"])
+st.markdown("Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. "
+            "A pénzügyi adatok **millió forintban** szerepelnek.")
+
 # ----------------------- Oldalsáv ---------------------------
 st.sidebar.header("Beállítások")
 
 # Ágazati opciók
 lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
-lab_df["__code"] = pd.to_numeric(lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False), errors="coerce")
+lab_df["__code"] = pd.to_numeric(
+    lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
+    errors="coerce"
+)
 lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
 opts = ["Összes ágazat"] + lab_df["label"].tolist()
 
@@ -70,9 +75,9 @@ if st.session_state['real_data'] == True:
         'EBIT (millió Ft)': 'ereduzem',
         'Export értéke (millió Ft)': 'export_value',
         'Kötelezettségek (millió Ft)': 'liabilities',
-        'Anyag jellegű ráfordítások (millió Ft)':'ranyag',
-        'Jegyzett tőke (millió Ft)':'jetok',
-        'Támogatás mértéke (millió Ft)':'grant_value'
+        'Anyag jellegű ráfordítások (millió Ft)': 'ranyag',
+        'Jegyzett tőke (millió Ft)': 'jetok',
+        'Támogatás mértéke (millió Ft)': 'grant_value'
     }
 else:
     MONETARY_VARS = {
@@ -95,11 +100,12 @@ var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
 available = {k: v for k, v in var_map.items() if v in cs.columns}
 x_label = st.sidebar.selectbox("X változó", list(available.keys()), index=0)
 y_label = st.sidebar.selectbox("Y változó", list(available.keys()), index=min(4, len(available)-1))
-xvar = available[x_label]; yvar = available[y_label]
+xvar = available[x_label]
+yvar = available[y_label]
 x_is_monetary = xvar in MONETARY_VARS.values()
 y_is_monetary = yvar in MONETARY_VARS.values()
 
-# ----------------------- Szélsőérték-kezelés (új, 4 opció) -----------------------
+# ----------------------- Szélsőérték-kezelés -----------------------
 FILTER_OPTIONS = [
     "Nincs szűrés",
     "Winsor top–bottom 2%",
@@ -111,14 +117,10 @@ st.sidebar.subheader("Szélsőérték-kezelés")
 x_filter = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 # y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
-# Kézi százalékok, ha szükséges
-# x_low_manual, x_high_manual = 2.0, 98.0
-# y_low_manual, y_high_manual = 2.0, 98.0
-
 df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
 df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
 
-# pénzügyiek ezres megjelenítés (millió Ft -> ezer millió? Itt marad, ahogy nálad volt: /1000)
+# pénzügyiek ezres megjelenítés (millió Ft -> /1000)
 if x_is_monetary:
     df[xvar] = df[xvar] / 1000.0
 if y_is_monetary:
@@ -126,29 +128,47 @@ if y_is_monetary:
 
 if x_filter == "Kézi minimum/maximum":
     st.sidebar.markdown("**Kézi határok (a megjelenített egységben)**")
-    # sensible defaults: current min/max of x
     current_min = float(np.nanmin(df[xvar]))
     current_max = float(np.nanmax(df[xvar]))
-    x_low_manual = st.sidebar.number_input("Minimum", value=current_min, step=(current_max - current_min)/100 if current_max > current_min else 1.0)
-    x_high_manual = st.sidebar.number_input("Maximum", value=current_max, step=(current_max - current_min)/100 if current_max > current_min else 1.0)
+    x_low_manual = st.sidebar.number_input(
+        "Minimum",
+        value=current_min,
+        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+    )
+    x_high_manual = st.sidebar.number_input(
+        "Maximum",
+        value=current_max,
+        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+    )
     if x_low_manual > x_high_manual:
         st.sidebar.error("A minimum nem lehet nagyobb a maximum­nál.")
-        # swap to avoid crash and still continue
         manual_min, manual_max = x_high_manual, x_low_manual
 else:
     x_low_manual = None
     x_high_manual = None
 
-#if x_filter == "Levágás (kézi megadás)":
-#    x_low_manual = st.sidebar.number_input("X alsó percentil (%)", min_value=0.0, max_value=49.0, value=2.0, step=0.5)
-#    x_high_manual = st.sidebar.number_input("X felső percentil (%)", min_value=51.0, max_value=100.0, value=98.0, step=0.5)
-# if y_filter == "Levágás (kézi megadás)":
-#    y_low_manual = st.sidebar.number_input("Y alsó percentil (%)", min_value=0.0, max_value=49.0, value=2.0, step=0.5)
-#    y_high_manual = st.sidebar.number_input("Y felső percentil (%)", min_value=51.0, max_value=100.0, value=98.0, step=0.5)
+# ----------------------- Bin scatter opció (új) -----------------------
+st.sidebar.subheader("Ábra beállítások")
+BIN_SCATTER_OPTIONS = [
+    "Eredeti",
+    "5 bin",
+    "10 bin",
+    "20 bin",
+    "100 bin"
+]
+bin_scatter_choice = st.sidebar.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
+bin_scatter_map = {
+    "5 bin": 5,
+    "10 bin": 10,
+    "20 bin": 20,
+    "100 bin": 100
+}
+n_bins = bin_scatter_map.get(bin_scatter_choice, None)
+use_bin_scatter = n_bins is not None
 
 # ----------------------- Illesztés ---------------------------
 fit_type = st.sidebar.selectbox(
-    "Illesztés rárajzolása",
+    "Illesztés rárajzolása (eredeti adaton, nem a bin-eken)",
     ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsős (5 bin)", "Lépcsős (20 bin)"],
     index=0
 )
@@ -157,14 +177,13 @@ if fit_type == "LOWESS" and not HAS_LOWESS:
 
 # Plot megjelenés
 alpha = st.sidebar.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
-size  = st.sidebar.slider("Pontméret", 5, 100, 20, 1)
+size = st.sidebar.slider("Pontméret", 5, 100, 20, 1)
 
 # Log skálák
 logx = st.sidebar.checkbox("Logaritmikus skála X", value=False)
 logy = st.sidebar.checkbox("Logaritmikus skála Y", value=False)
 
 # ----------------------- Szűrés és előkészítés ---------------------
-
 
 # Log-hoz csak pozitívak maradnak
 if logx:
@@ -176,13 +195,14 @@ if df.empty:
     st.error("Nincs adat a megadott feltételekhez.")
     st.stop()
 
-def apply_filter(series: pd.Series, mode: str, low_val: float , high_val: float) -> pd.Series:
+
+def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
     """
     mode: one of FILTER_OPTIONS
     - Nincs szűrés: return as-is
     - Winsor top–bottom 2%: clip at 2/98
     - Levágás top–bottom 2%: drop outside 2/98
-    - Levágás (kézi megadás): drop outside low_pct/high_pct
+    - Kézi minimum/maximum: drop outside low_val/high_val
     """
     s = series.dropna()
     if len(s) < 5 or mode == "Nincs szűrés":
@@ -201,6 +221,7 @@ def apply_filter(series: pd.Series, mode: str, low_val: float , high_val: float)
 
     return s
 
+
 x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
 y = df[yvar]
 
@@ -212,23 +233,41 @@ if plot_df.empty:
     st.error("A szélsőérték-kezelés után nincs megjeleníthető adat.")
     st.stop()
 
+# ----------------------- Bin scatter előkészítés -----------------------
+# Az illesztések továbbra is az egyedi megfigyeléseken futnak (plot_df),
+# a pontdiagram viszont használhat binelt adatot (scatter_df).
+scatter_df = plot_df.copy()
+if use_bin_scatter and len(plot_df) >= 2:
+    try:
+        plot_df["__bin_scatter"] = pd.qcut(plot_df[xvar], q=n_bins, duplicates="drop")
+        gb_scatter = plot_df.groupby("__bin_scatter", observed=True)
+        scatter_df = gb_scatter[[xvar, yvar]].mean().reset_index(drop=True)
+        plot_df.drop(columns="__bin_scatter", inplace=True)
+    except Exception:
+        # hiba esetén marad az eredeti pontdiagram
+        scatter_df = plot_df.copy()
+
 # ----------------------- Transzformációk (fit a transzformált térben) -----------------------
 def fwd_x(v):
     return np.log(v) if logx else v
 
+
 def inv_x(v):
-    return (np.exp(v)) if logx else v
+    return np.exp(v) if logx else v
+
 
 def fwd_y(v):
     return np.log(v) if logy else v
 
+
 def inv_y(v):
-    return (np.exp(v)) if logy else v
+    return np.exp(v) if logy else v
+
 
 # ----------------------- Ábra -----------------------------
 fig, ax = plt.subplots()
 sns.scatterplot(
-    data=plot_df, x=xvar, y=yvar, s=size, alpha=alpha,
+    data=scatter_df, x=xvar, y=yvar, s=size, alpha=alpha,
     edgecolor='white', linewidth=0.2, color=color[0], ax=ax
 )
 
@@ -239,7 +278,9 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
     deg = {"Lineáris": 1, "Kvadratikus": 2, "Köbös": 3}[fit_type]
     xx = fwd_x(plot_df[xvar].to_numpy())
     yy = fwd_y(plot_df[yvar].to_numpy())
-    order = np.argsort(xx); xx_sorted = xx[order]; yy_sorted = yy[order]
+    order = np.argsort(xx)
+    xx_sorted = xx[order]
+    yy_sorted = yy[order]
     coef = np.polyfit(xx_sorted, yy_sorted, deg=deg)
     poly = np.poly1d(coef)
 
@@ -253,12 +294,15 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
     # Koef szöveg a transzformált tér egyenletére (ez „lineáris” ott)
     if deg == 1:
         a, b = coef[1], coef[0]
-        # Megnevezés jelzi, melyik tengely(ek) logban vannak
         trafo_note = []
-        if logy: trafo_note.append("ln(y)")
-        else:    trafo_note.append("y")
-        if logx: xname = "ln(x)"
-        else:    xname = "x"
+        if logy:
+            trafo_note.append("ln(y)")
+        else:
+            trafo_note.append("y")
+        if logx:
+            xname = "ln(x)"
+        else:
+            xname = "x"
         coef_text = f"{fit_type}: {trafo_note[0]} = {a:.4g} + {b:.4g}·{xname}"
     elif deg == 2:
         a, b, c = coef[2], coef[1], coef[0]
@@ -269,7 +313,10 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
         a, b, c, d = coef[3], coef[2], coef[1], coef[0]
         xname = "ln(x)" if logx else "x"
         yname = "ln(y)" if logy else "y"
-        coef_text = f"{fit_type}: {yname} = {a:.4g} + {b:.4g}·{xname} + {c:.4g}·{xname}² + {d:.4g}·{xname}³"
+        coef_text = (
+            f"{fit_type}: {yname} = {a:.4g} + {b:.4g}·{xname} + "
+            f"{c:.4g}·{xname}² + {d:.4g}·{xname}³"
+        )
 
 elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
     x_tr = fwd_x(plot_df[xvar].values)
@@ -293,13 +340,24 @@ elif fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     y_mean_tr = fwd_y(gb[yvar].mean())
     # vissza eredeti skálára
     y_mean = inv_y(y_mean_tr)
-    bin_stats = pd.concat([bin_edges, y_mean.rename("y_mean")], axis=1).reset_index(drop=True)
+    bin_stats = pd.concat(
+        [bin_edges, y_mean.rename("y_mean")],
+        axis=1
+    ).reset_index(drop=True)
 
     for _, r in bin_stats.iterrows():
-        ax.hlines(y=r["y_mean"], xmin=r["x_min"], xmax=r["x_max"], colors=color[1], linewidth=3, alpha=0.9)
+        ax.hlines(
+            y=r["y_mean"],
+            xmin=r["x_min"],
+            xmax=r["x_max"],
+            colors=color[1],
+            linewidth=3,
+            alpha=0.9
+        )
     plot_df.drop(columns="__bin", inplace=True)
 
-ax.set_xlabel(x_label); ax.set_ylabel(y_label)
+ax.set_xlabel(x_label)
+ax.set_ylabel(y_label)
 ax.spines[['top', 'right']].set_visible(False)
 
 # --- X axis ---
@@ -307,7 +365,6 @@ if logx:
     # log scale with base e
     ax.set_xscale('log', base=np.e)
     ax.xaxis.set_major_locator(LogLocator(base=np.e))
-
     # show ln(x) as tick labels
     ax.xaxis.set_major_formatter(
         FuncFormatter(lambda v, _: f"{np.log(v):.2f}")  # ln(v)
@@ -324,7 +381,6 @@ ax.tick_params(axis='x', labelrotation=25)
 if logy:
     ax.set_yscale('log', base=np.e)
     ax.yaxis.set_major_locator(LogLocator(base=np.e))
-
     # show ln(y) as tick labels
     ax.yaxis.set_major_formatter(
         FuncFormatter(lambda v, _: f"{np.log(v):.2f}")
@@ -348,6 +404,7 @@ st.pyplot(fig)
 # ----------------------- Összegzés --------------------------
 scope_label = sel_label
 
+
 def tail_note_txt(mode, low=None, high=None):
     if mode == "Nincs szűrés":
         return "nincs"
@@ -355,17 +412,19 @@ def tail_note_txt(mode, low=None, high=None):
         return "winsor 2–98%"
     if mode == "Levágás top–bottom 2%":
         return "levágás 2–98%"
-    if mode == "Levágás (kézi megadás)":
-        return f"levágás {low:.1f}–{high:.1f}%"
+    if mode == "Kézi minimum/maximum":
+        return f"levágás {low:.1f}–{high:.1f}"
     return "—"
 
+
 tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
-# tail_note_y = tail_note_txt(y_filter, y_low_manual, y_high_manual)
+bin_note = bin_scatter_choice
 
 st.markdown(
     f"**Minta:** {scope_label} · **X:** `{x_label}` · **Y:** `{y_label}` · "
     f"**Megfigyelések:** {len(plot_df):,} · **Szélső értékek (X/Y):** {tail_note_x} · "
-    f"**Illesztés:** {fit_type} · **Log (X/Y):** {logx} / {logy}"
+    f"**Illesztés:** {fit_type} · **Log (X/Y):** {logx} / {logy} · "
+    f"**Bin scatter:** {bin_note}"
 )
 
 if coef_text is not None:
