@@ -28,10 +28,21 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
 cs = load_cross_section()
 
 # ----------------------------- Header ------------------------------
-if st.session_state['real_data']:
-    st.title('Eloszlások vizualizálása')
-else:
-    st.title('Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data']:
+        st.title('Eloszlások vizualizálása')
+    else:
+        st.title('Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
 st.markdown("Válasszon egy **ágazatot** és egy **változót** a megjelenítéshez. A pénzügyi adatok **millió forintban** szerepelnek.")
 
 # ----------------------------- Sidebar -----------------------------

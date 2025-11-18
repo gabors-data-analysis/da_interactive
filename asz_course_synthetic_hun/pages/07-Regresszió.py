@@ -7,12 +7,23 @@ import statsmodels.api as sm
 # ------------------------------------------------------
 # Beállítások
 # ------------------------------------------------------
-if st.session_state['real_data'] == True:
-    st.set_page_config(page_title="Növekedési regressziók — Vállalatok", layout="wide")
-    st.title("Növekedési regressziók — 2019 keresztmetszet")
-else:
-    st.set_page_config(page_title="Növekedési regressziók — Vállalatok (szimulált)", layout="wide")
-    st.title("Növekedési regressziók — 2019 keresztmetszet (szimulált)")
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data'] == True:
+        st.set_page_config(page_title="Növekedési regressziók — Vállalatok", layout="wide")
+        st.title("Növekedési regressziók — 2019 keresztmetszet")
+    else:
+        st.set_page_config(page_title="Növekedési regressziók — Vállalatok (szimulált)", layout="wide")
+        st.title("Növekedési regressziók — 2019 keresztmetszet (szimulált)")
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
 
 
 
@@ -115,7 +126,7 @@ y = d[y_col].astype(float)  # safe; NaN stays NaN
 # ------------------------------------------------------
 exclude_cols = {
     "nace2_name_code", "nace2", "growth_sim", "ln_sales_lead_sim", "sales_lead_sim",
-    "ln_sales22_lead2", "sales22_lead2", "ln_sales", "name_hu", "row_id", "exit", "county"
+    "ln_sales22_lead2", "sales22_lead2", "ln_sales", "name_hu", "row_id", "exit", "county","sales_growth_log_diff","sales_growth_perc","is_ginop","is_gop","is_other","is_tamop","is_vp"
 }
 MAX_CAT_LEVELS = 10
 

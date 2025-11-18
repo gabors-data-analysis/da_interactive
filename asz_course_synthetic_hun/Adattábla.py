@@ -233,7 +233,16 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
 df = make_demo_df()
 
 # ---------------------------- Rövid leírás -----------------------------
-st.title("Adattábla példa - Szimulált adatok")
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    st.title("Adattábla példa - Szimulált adatok")
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
 
 # ---------------------------- Változótípusok ---------------------------
 def classify_series(s: pd.Series) -> str:

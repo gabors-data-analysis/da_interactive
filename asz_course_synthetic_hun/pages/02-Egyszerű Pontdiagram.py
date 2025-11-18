@@ -41,10 +41,21 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
 cs = load_cross_section()
 
 # ----------------------- UI: fejlécek ------------------------
-if st.session_state['real_data'] == True:
-    st.title('Pontdiagram — 2019 keresztmetszet')
-else:
-    st.title('Pontdiagram — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data'] == True:
+        st.title('Pontdiagram — 2019 keresztmetszet')
+    else:
+        st.title('Pontdiagram — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
 
 st.markdown("Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
@@ -422,9 +433,9 @@ bin_note = bin_scatter_choice
 
 st.markdown(
     f"**Minta:** {scope_label} · **X:** `{x_label}` · **Y:** `{y_label}` · "
-    f"**Megfigyelések:** {len(plot_df):,} · **Szélső értékek (X/Y):** {tail_note_x} · "
-    f"**Illesztés:** {fit_type} · **Log (X/Y):** {logx} / {logy} · "
-    f"**Bin scatter:** {bin_note}"
+    #f"**Megfigyelések:** {len(plot_df):,} · **Szélső értékek (X/Y):** {tail_note_x} · "
+    #f"**Illesztés:** {fit_type} · **Log (X/Y):** {logx} / {logy} · "
+    #f"**Bin scatter:** {bin_note}"
 )
 
 if coef_text is not None:

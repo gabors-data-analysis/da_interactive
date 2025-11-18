@@ -80,10 +80,22 @@ data_path = st.session_state.get('data_path', 'data/synthetic/sim_cs2019_by_nace
 cs = load_cross_section(data_path)
 
 # --------------------------- Cím & leírás ---------------------------
-if real_data:
-    st.title('Korrelációk ágazatonként — 2019 keresztmetszet')
-else:
-    st.title('Korrelációk ágazatonként — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data']:
+        st.title('Korrelációk ágazatonként — 2019 keresztmetszet')
+    else:
+        st.title('Korrelációk ágazatonként — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
+
 
 st.markdown(
     "Válasszon két **változót**. Az alkalmazás kiszámítja a **Pearson-féle korrelációt** "

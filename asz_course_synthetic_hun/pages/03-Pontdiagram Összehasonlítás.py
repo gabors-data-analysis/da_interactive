@@ -41,10 +41,22 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
 
 cs = load_cross_section()
 
-if st.session_state['real_data'] == True:
-    st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet')
-else:
-    st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data'] == True:
+        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet')
+    else:
+        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
+
 
 st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
@@ -373,7 +385,7 @@ with colA:
     if figA is not None:
         st.pyplot(figA)
         if coefA is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet (A, transzformált térben):** {coefA}")
+            st.markdown(f"**Illesztési egyenlet:** {coefA}")
 
 with colB:
     scope_B = filter_scope(cs, sel_label_B)
@@ -381,7 +393,7 @@ with colB:
     if figB is not None:
         st.pyplot(figB)
         if coefB is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet (B, transzformált térben):** {coefB}")
+            st.markdown(f"**Illesztési egyenlet:** {coefB}")
 
 # ----------------------- Lábléc összegzés -------------------
 tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
@@ -389,8 +401,8 @@ bin_note = bin_scatter_choice
 
 st.markdown(
     f"**Ágazatok:** A = {sel_label_A} · B = {sel_label_B} · "
-    f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
-    f"**Log (X/Y):** {logx} / {logy} · "
-    f"**Szélső értékek (X/Y):** {tail_note_x} · "
-    f"**Bin scatter:** {bin_note}"
+   # f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
+   # f"**Log (X/Y):** {logx} / {logy} · "
+   # f"**Szélső értékek (X/Y):** {tail_note_x} · "
+   # f"**Bin scatter:** {bin_note}"
 )

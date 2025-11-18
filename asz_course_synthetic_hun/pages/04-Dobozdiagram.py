@@ -101,10 +101,23 @@ data_path = st.session_state.get('data_path', 'data/synthetic/sim_cs2019_by_nace
 cs = load_cross_section(data_path)
 
 # --------------------------- Cím & leírás ---------------------------
-if real_data:
-    st.title('Dobozdiagram — 2019 keresztmetszet')
-else:
-    st.title('Dobozdiagram — 2019 keresztmetszet (szimulált)')
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data']:
+        st.title('Dobozdiagram — 2019 keresztmetszet')
+    else:
+        st.title('Dobozdiagram — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
+
 
 st.markdown(
     "Válasszon egy **kategóriás/dummy** X-változót és egy **folytonos** Y-változót. "
@@ -174,14 +187,8 @@ y_label = st.sidebar.selectbox("Y (folytonos)", y_labels, index=0)
 xvar = NAME2COL.get(x_label, x_label)
 yvar = NAME2COL.get(y_label, y_label)
 
-# ln(Y) + további opciók
-use_log_y = st.sidebar.checkbox("Y log skála (ln)", value=False)
-hide_outliers = st.sidebar.checkbox("Kiugrók elrejtése a dobozábrán", value=False)
-overlay_points = st.sidebar.checkbox("Egyedi pontok megjelenítése", value=False)
-
-y_is_monetary = yvar in MONETARY_VARS.values()
-
 # --------------------------- Y szélsőérték-kezelés (ÚJ) ---------------------------
+y_is_monetary = yvar in MONETARY_VARS.values()
 st.sidebar.subheader("Szélsőérték-kezelés (Y)")
 y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
@@ -214,6 +221,15 @@ if y_filter == "Kézi minimum/maximum":
 else:
     y_low_manual = None
     y_high_manual = None
+
+# ln(Y) + további opciók
+use_log_y = st.sidebar.checkbox("Y log skála (ln)", value=False)
+hide_outliers = st.sidebar.checkbox("Kiugrók elrejtése a dobozábrán", value=False)
+overlay_points = st.sidebar.checkbox("Egyedi pontok megjelenítése", value=False)
+
+
+
+
 
 # --------------------------- Szélsőérték-kezelés függvény ---------------------------
 def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
