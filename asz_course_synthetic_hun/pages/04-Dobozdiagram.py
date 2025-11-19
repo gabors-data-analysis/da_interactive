@@ -97,7 +97,7 @@ def load_cross_section(path: str) -> pd.DataFrame:
     df["nace2_name_code"] = df["nace2_name_code"].astype(str)
     return df
 
-data_path = st.session_state.get('data_path', 'data/synthetic/sim_cs2019_by_nace2_withcats.parquet')
+data_path = st.session_state['data_path']
 cs = load_cross_section(data_path)
 
 # --------------------------- Cím & leírás ---------------------------

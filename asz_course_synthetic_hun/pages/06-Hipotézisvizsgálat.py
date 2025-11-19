@@ -1,14 +1,12 @@
-# mean_test_by_grant.py
+# mean_test_by_grant_nace1.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from matplotlib.ticker import FuncFormatter
 from scipy import stats
 
 # próbálunk SciPy-t használni pontos t-próbához
 try:
-    
     HAS_SCIPY = True
 except Exception:
     HAS_SCIPY = False
@@ -19,16 +17,60 @@ color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 real_data = st.session_state.get('real_data', False)
 if real_data:
     st.set_page_config(
-        page_title='Átlagteszt támogatott / nem támogatott — Vállalatok (HU keresztmetszet)',
+        page_title='Átlagteszt támogatott / nem támogatott — NACE1 csoportok',
         layout='wide'
     )
 else:
     st.set_page_config(
-        page_title='Átlagteszt támogatott / nem támogatott — Vállalatok (HU keresztmetszet, szimulált)',
+        page_title='Átlagteszt támogatott / nem támogatott — NACE1 csoportok (szimulált)',
         layout='wide'
     )
 
-# pénzügyi változók (mint a szórásdiagramokban)
+# --------- NACE1 csoportok (ugyanúgy, mint a korrelációs dashboardban) ---------
+NACE1_LABELS = {
+    "01-04": "NACE 01–04 (MEZŐGAZDASÁG)",
+    "05-09": "NACE 05–09 (BÁNYÁSZAT, KŐFEJTÉS)",
+    "10-34": "NACE 10–34 (FELDOLGOZÓIPAR)",
+    "35":    "NACE 35 (VILLAMOSENERGIA-, GÁZ-, GŐZELLÁTÁS)",
+    "36-39": "NACE 36–39 (VÍZELLÁTÁS)",
+    "40-44": "NACE 40–44 (ÉPÍTŐIPAR)",
+    "45-47": "NACE 45–47 (KERESKEDELEM, GÉPJÁRMŰJAVÍTÁS)",
+    "48-54": "NACE 48–54 (SZÁLLÍTÁS, RAKTÁROZÁS)",
+    "55-57": "NACE 55–57 (SZÁLLÁSHELY-SZOLGÁLTATÁS, VENDÉGLÁTÁS)",
+    "58-63": "NACE 58–63 (INFORMÁCIÓ, KOMMUNIKÁCIÓ)",
+    "64-66": "NACE 64–66 (PÉNZÜGYI, BIZTOSÍTÁSI TEVÉKENYSÉG)",
+    "67-68": "NACE 67–68 (INGATLANÜGYLETEK)",
+    "69-76": "NACE 69–76 (SZAKMAI, TUDOMÁNYOS, MŰSZAKI TEVÉKENYSÉG)",
+    "77-83": "NACE 77–83 (ADMINISZTRATÍV ÉS SZOLGÁLTATÁST TÁMOGATÓ TEVÉKENYSÉG)",
+    "84":    "NACE 84 (KÖZIGAZGATÁS, VÉDELEM; KÖTELEZŐ TÁRSADALOMBIZTOSÍTÁS)",
+    "85":    "NACE 85 (OKTATÁS)",
+    "86-89": "NACE 86–89 (HUMÁN-EGÉSZSÉGÜGYI, SZOCIÁLIS ELLÁTÁS)",
+    "90-99": "NACE 90–99 (EGYÉB)",
+}
+
+BINS = [0, 4, 9, 34, 35, 39, 44, 47, 54, 57, 63, 66, 68, 76, 83, 84, 85, 89, 99]
+LABELS = [
+    "01-04",
+    "05-09",
+    "10-34",
+    "35",
+    "36-39",
+    "40-44",
+    "45-47",
+    "48-54",
+    "55-57",
+    "58-63",
+    "64-66",
+    "67-68",
+    "69-76",
+    "77-83",
+    "84",
+    "85",
+    "86-89",
+    "90-99",
+]
+
+# --------------------------- Változó-készlet ---------------------------
 MONETARY_VARS_REAL = {
     'Értékesítés (millió Ft)': 'sales_clean',
     'Tárgyi eszközök (millió Ft)': 'tanass_clean',
@@ -59,56 +101,63 @@ NON_MONETARY_VARS = {
 
 MONETARY_VARS = MONETARY_VARS_REAL if real_data else MONETARY_VARS_SIM
 VAR_MAP = {**MONETARY_VARS, **NON_MONETARY_VARS}
-VAR_LABELS = list(VAR_MAP.keys())
 
-# --------------------------- Adatbetöltés ---------------------------
+# --------------------------- Adatbetöltés (NACE1) ---------------------------
 @st.cache_data
-def load_cross_section(path: str) -> pd.DataFrame:
+def load_cross_section_with_nace1(path: str) -> pd.DataFrame:
     p = Path(path)
     if not p.exists():
         st.error(f"Fájl nem található: {p}")
         st.stop()
     df = pd.read_parquet(p).copy()
-    need = {"nace2", "nace2_name_code", "has_grant"}
+    need = {"nace2", "has_grant"}
     missing = need - set(df.columns)
     if missing:
         st.error(f"Hiányzó oszlop(ok) az adatban: {missing}")
         st.stop()
+
     df["nace2"] = df["nace2"].astype(str)
-    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
+    nace2_num = pd.to_numeric(df["nace2"].str[:2], errors="coerce")
+
+    df["nace1_code"] = pd.cut(
+        nace2_num,
+        bins=BINS,
+        labels=LABELS,
+        right=True,
+        include_lowest=True
+    )
+    df["nace1_name"] = df["nace1_code"].astype(str).map(NACE1_LABELS).fillna(df["nace1_code"].astype(str))
+
     return df
 
-data_path = st.session_state.get('data_path', 'data/synthetic/sim_cs2019_by_nace2_withcats.parquet')
-cs = load_cross_section(data_path)
+data_path = st.session_state['data_path']
+cs = load_cross_section_with_nace1(data_path)
 
 # --------------------------- Cím & leírás ---------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 col_left, col_right = st.columns([4, 1])
 
 with col_left:
-    if st.session_state['real_data']:
-        st.title('Átlagteszt támogatott / nem támogatott — 2019 keresztmetszet')
+    if real_data:
+        st.title('Átlagteszt támogatott / nem támogatott — NACE1 csoportok, 2019 keresztmetszet')
     else:
-        st.title('Átlagteszt támogatott / nem támogatott — 2019 keresztmetszet (szimulált)')
+        st.title('Átlagteszt támogatott / nem támogatott — NACE1 csoportok, 2019 keresztmetszet (szimulált)')
 
 with col_right:
-    # logó a jobb felső sarokban
     logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
     if logo_path.exists():
         st.image(str(logo_path), use_container_width=True)
 
-
-
 st.markdown(
     "Válasszon egy **folytonos változót**. A teszt H₀ hipotézise: "
     "a változó átlaga **azonos** a támogatást kapott és nem kapott vállalatoknál. "
-    "Hₐ: az átlagok **nem egyenlőek** (kétoldali teszt)."
+    "Hₐ: az átlagok **nem egyenlőek** (kétoldali teszt). "
+    "Az eredmények NACE1 csoportonként számolódnak."
 )
 
-# --------------------------- Oldalsáv ---------------------------
+# --------------------------- Oldalsáv (változó, NACE1, log, scope) ---------------------------
 st.sidebar.header("Beállítások")
 
-# Változó kiválasztása
 available_vars = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
 if not available_vars:
     st.error("Nincs elérhető folytonos változó az adatokban.")
@@ -118,77 +167,29 @@ y_label = st.sidebar.selectbox("Változó", list(available_vars.keys()), index=0
 yvar = available_vars[y_label]
 y_is_monetary = yvar in MONETARY_VARS.values()
 
-# Ágazat választás (baseline)
-lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
-lab_df["__code"] = pd.to_numeric(
-    lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
-    errors="coerce"
-)
-lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
-sector_options = ["Összes ágazat"] + lab_df["label"].tolist()
-sel_label = st.sidebar.selectbox("Ágazat (baseline sorhoz)", sector_options, index=0)
+# NACE1 baseline választás
+sector_options = ["Összes ágazat"] + [NACE1_LABELS[k] for k in LABELS if k in NACE1_LABELS]
+sel_label = st.sidebar.selectbox("NACE1 csoport (baseline sorhoz)", sector_options, index=0)
 scope_all = sel_label == "Összes ágazat"
 
-# Ugyanaz a szélsőérték-kezelés, mint a szórásdiagramnál
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Winsor top–bottom 2%",
-    "Levágás top–bottom 2%",
-    "Kézi minimum/maximum"
-]
-
-st.sidebar.subheader("Szélsőérték-kezelés (Y)")
-y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-
-# Manuális min/max (a megjelenített egységben)
-# Előbb minimális adat-előkészítés, hogy legyen tartomány
-tmp_df = cs.replace([np.inf, -np.inf], np.nan)
-if yvar in tmp_df.columns:
-    tmp_vals = tmp_df[yvar].dropna()
-else:
-    tmp_vals = pd.Series(dtype=float)
-
-if y_is_monetary and not tmp_vals.empty:
-    tmp_vals = tmp_vals / 1000.0
-
-if y_filter == "Kézi minimum/maximum" and not tmp_vals.empty:
-    st.sidebar.markdown("**Y kézi határok (a megjelenített egységben)**")
-    current_min_y = float(np.nanmin(tmp_vals))
-    current_max_y = float(np.nanmax(tmp_vals))
-    y_low_manual = st.sidebar.number_input(
-        "Y minimum",
-        value=current_min_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    y_high_manual = st.sidebar.number_input(
-        "Y maximum",
-        value=current_max_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    if y_low_manual > y_high_manual:
-        st.sidebar.error("A minimum nem lehet nagyobb a maximum­nál.")
-else:
-    y_low_manual = None
-    y_high_manual = None
-
-# Log skála, mint a szórásdiagramnál
+# Log skála (ln)
 use_log_y = st.sidebar.checkbox("Y log skála (ln)", value=False)
 
-# Eredmény csak baseline ágazatra vagy minden ágazatra?
+# Eredmény típusa
 scope_mode = st.sidebar.radio(
     "Eredmény típusa",
-    ["Csak kiválasztott ágazat", "Minden ágazat külön (plusz összes)"],
+    ["Csak kiválasztott NACE1 csoport", "Minden NACE1 csoport külön (plusz összes)"],
     index=0
 )
 
 # --------------------------- Segédfüggvények ---------------------------
-def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
+def apply_filter(series: pd.Series, mode: str, manual_min: float, manual_max: float) -> pd.Series:
     """
-    Szélsőérték-kezelés Y-re:
+    Szélsőérték-kezelés Y-ra:
     - Nincs szűrés
     - Winsor top–bottom 2%
     - Levágás top–bottom 2%
-    - Kézi minimum/maximum: low_val/high_val alapján vág
+    - Kézi minimum/maximum: manual_min/manual_max alapján vág
     """
     s = series.dropna()
     if len(s) < 5 or mode == "Nincs szűrés":
@@ -202,8 +203,8 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
         q_low, q_high = np.percentile(s, [2, 98])
         return s[(s > q_low) & (s < q_high)]
 
-    if mode == "Kézi minimum/maximum" and low_val is not None and high_val is not None:
-        return s[(s > low_val) & (s < high_val)]
+    if mode == "Kézi minimum/maximum" and manual_min is not None and manual_max is not None:
+        return s[(s > manual_min) & (s < manual_max)]
 
     return s
 
@@ -245,7 +246,6 @@ def one_ttest(sub: pd.DataFrame) -> pd.Series:
     if HAS_SCIPY:
         t_stat, p_val = stats.ttest_ind(g1, g0, equal_var=False, nan_policy="omit")
     else:
-        # kézi t és normálközelítéses p-érték (ha nincs SciPy)
         s1_sq = g1.var(ddof=1)
         s0_sq = g0.var(ddof=1)
         se_diff = np.sqrt(s1_sq/n1 + s0_sq/n0)
@@ -254,7 +254,6 @@ def one_ttest(sub: pd.DataFrame) -> pd.Series:
             p_val = np.nan
         else:
             t_stat = (mean1 - mean0) / se_diff
-            # normálközelítés
             p_val = 2 * (1 - 0.5 * (1 + np.math.erf(abs(t_stat) / np.sqrt(2))))
 
     return pd.Series({
@@ -263,34 +262,72 @@ def one_ttest(sub: pd.DataFrame) -> pd.Series:
         "t": t_stat, "p": p_val, "N": N
     })
 
-# --------------------------- Adatelőkészítés a teszthez ---------------------------
+# --------------------------- Adatelőkészítés ---------------------------
 df = cs.copy()
 df = df.replace([np.inf, -np.inf], np.nan)
 
-needed_cols = ["nace2_name_code", yvar, "has_grant"]
+needed_cols = ["nace1_code", "nace1_name", yvar, "has_grant"]
 missing_cols = [c for c in needed_cols if c not in df.columns]
 if missing_cols:
     st.error(f"Hiányzó oszlop(ok) az adatban: {missing_cols}")
     st.stop()
 
-df = df[needed_cols].dropna(subset=[yvar, "has_grant"])
+df = df[needed_cols].dropna(subset=[yvar, "has_grant", "nace1_code"])
 if df.empty:
-    st.error("Nincs olyan megfigyelés, ahol a kiválasztott változó és a támogatottság is ismert.")
+    st.error("Nincs olyan megfigyelés, ahol a kiválasztott változó, a támogatottság és a NACE1 kód is ismert.")
     st.stop()
 
 # pénzügyi skálázás (millió Ft -> /1000)
 if y_is_monetary:
     df[yvar] = df[yvar] / 1000.0
 
-# log skála -> csak pozitívak maradnak
+# log skála -> csak pozitívak maradnak, utána ln
 if use_log_y:
     df = df[df[yvar] > 0].copy()
 if df.empty:
     st.error("A log-transzformáció után nincs megjeleníthető adat.")
     st.stop()
 
-# szélsőérték-kezelés Y-ra
-y_filtered = apply_filter(df[yvar], y_filter, y_low_manual, y_high_manual)
+if use_log_y:
+    df[yvar] = np.log(df[yvar].astype(float))
+    y_axis_label = f"ln({y_label})"
+else:
+    y_axis_label = y_label
+
+# --------------------------- Szélsőérték kezelés (Y) – az általad használt minta ---------------------------
+st.sidebar.subheader("Szélsőérték kezelés")
+FILTER_OPTIONS = [
+    "Nincs szűrés",
+    "Winsor top–bottom 2%",
+    "Levágás top–bottom 2%",
+    "Kézi minimum/maximum"
+]
+tail_mode = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+
+y_vec = df[yvar].replace([np.inf, -np.inf], np.nan).dropna()
+if tail_mode == "Kézi minimum/maximum" and not y_vec.empty:
+    st.sidebar.markdown("**Kézi határok (a megjelenített egységben)**")
+    current_min = float(np.nanmin(y_vec))
+    current_max = float(np.nanmax(y_vec))
+    manual_min = st.sidebar.number_input(
+        "Minimum",
+        value=current_min,
+        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+    )
+    manual_max = st.sidebar.number_input(
+        "Maximum",
+        value=current_max,
+        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+    )
+    if manual_min > manual_max:
+        st.sidebar.error("A minimum nem lehet nagyobb a maximum­nál.")
+        manual_min, manual_max = manual_max, manual_min
+else:
+    manual_min = None
+    manual_max = None
+
+# alkalmazzuk a szűrést
+y_filtered = apply_filter(df[yvar], tail_mode, manual_min, manual_max)
 df = df.loc[y_filtered.index].copy()
 df[yvar] = y_filtered
 
@@ -298,23 +335,19 @@ if df.empty:
     st.error("A szélsőérték-kezelés után nincs megjeleníthető adat.")
     st.stop()
 
-# log transzformáció ténylegesen (ha kérte a felhasználó)
-if use_log_y:
-    df[yvar] = np.log(df[yvar].astype(float))
-    y_axis_label = f"ln({y_label})"
-else:
-    y_axis_label = y_label
+# ... mindened marad, egészen idáig:
 
 # --------------------------- Eredmények számítása ---------------------------
-# baseline: kiválasztott ágazat vagy összes
 if scope_all:
     baseline_df = df.copy()
+    baseline_name = "Összes ágazat"
 else:
-    baseline_df = df[df["nace2_name_code"] == sel_label].copy()
+    baseline_df = df[df["nace1_name"] == sel_label].copy()
+    baseline_name = sel_label
 
 baseline_stats = one_ttest(baseline_df)
 baseline_row = pd.DataFrame({
-    "Ágazat": [sel_label if not scope_all else "Összes ágazat"],
+    "Ágazat": [baseline_name],
     "Átlag (kapott)": [baseline_stats["mean_grant"]],
     "SE (kapott)": [baseline_stats["se_grant"]],
     "n (kapott)": [baseline_stats["n_grant"]],
@@ -326,24 +359,15 @@ baseline_row = pd.DataFrame({
     "N": [baseline_stats["N"]],
 })
 
-if scope_mode == "Csak kiválasztott ágazat":
+if scope_mode == "Csak kiválasztott NACE1 csoport":
     result = baseline_row
 else:
-    # minden ágazat + összes
-    # iparáganként, NACE-only nevek elhagyása, kód szerinti rendezés
-    by_ind = df.groupby("nace2_name_code", observed=True).apply(one_ttest).reset_index()
-
-    mask_valid = ~by_ind["nace2_name_code"].str.startswith("NACE", na=False)
-    by_ind = by_ind[mask_valid].copy()
-
-    by_ind["__code"] = pd.to_numeric(
-        by_ind["nace2_name_code"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
-        errors="coerce"
-    )
-    by_ind = by_ind.sort_values(["__code", "nace2_name_code"]).drop(columns="__code")
+    by_ind = df.groupby("nace1_code", observed=True).apply(one_ttest).reset_index()
+    by_ind["Ágazat"] = by_ind["nace1_code"].astype(str).map(NACE1_LABELS).fillna(by_ind["nace1_code"].astype(str))
+    by_ind = by_ind.sort_values("nace1_code")
 
     table_ind = pd.DataFrame({
-        "Ágazat": by_ind["nace2_name_code"],
+        "Ágazat": by_ind["Ágazat"],
         "Átlag (kapott)": by_ind["mean_grant"],
         "SE (kapott)": by_ind["se_grant"],
         "n (kapott)": by_ind["n_grant"],
@@ -355,7 +379,6 @@ else:
         "N": by_ind["N"],
     })
 
-    # Összes ágazat sor: minden megfigyelés egyben
     overall_stats = one_ttest(df)
     overall_row = pd.DataFrame({
         "Ágazat": ["Összes ágazat"],
@@ -372,33 +395,114 @@ else:
 
     result = pd.concat([overall_row, table_ind], ignore_index=True)
 
-# --------------------------- Megjelenítés ---------------------------
-st.subheader("Átlagteszt eredményei")
+# --------------------------- 95%-os CI hozzáadása ---------------------------
+# 95%-os konfidencia-intervallum: mean ± 1.96 * SE
+result["Alsó 95% CI (kapott)"] = result["Átlag (kapott)"] - 1.96 * result["SE (kapott)"]
+result["Felső 95% CI (kapott)"] = result["Átlag (kapott)"] + 1.96 * result["SE (kapott)"]
+result["Alsó 95% CI (nem kapott)"] = result["Átlag (nem kapott)"] - 1.96 * result["SE (nem kapott)"]
+result["Felső 95% CI (nem kapott)"] = result["Átlag (nem kapott)"] + 1.96 * result["SE (nem kapott)"]
+
+# --------------------------- 1. táblázat: mintaösszehasonlítás ---------------------------
+st.subheader("Mintaösszehasonlítás: átlagok és 95%-os konfidencia-intervallumok")
+
+if scope_mode == "Csak kiválasztott NACE1 csoport":
+    # ---- EGY NACE1: nincs Ágazat oszlop, csak statisztikák soronként ----
+    r = result.iloc[0]
+
+    rows = [
+        {"Statisztika": "Átlag",
+         "Támogatott": r["Átlag (kapott)"],
+         "Nem támogatott": r["Átlag (nem kapott)"]},
+        {"Statisztika": "SE",
+         "Támogatott": r["SE (kapott)"],
+         "Nem támogatott": r["SE (nem kapott)"]},
+        {"Statisztika": "n",
+         "Támogatott": r["n (kapott)"],
+         "Nem támogatott": r["n (nem kapott)"]},
+        {"Statisztika": "Alsó 95% CI",
+         "Támogatott": r["Alsó 95% CI (kapott)"],
+         "Nem támogatott": r["Alsó 95% CI (nem kapott)"]},
+        {"Statisztika": "Felső 95% CI",
+         "Támogatott": r["Felső 95% CI (kapott)"],
+         "Nem támogatott": r["Felső 95% CI (nem kapott)"]},
+    ]
+
+    stats_table = pd.DataFrame(rows)
+
+    st.dataframe(
+        stats_table.style.format({
+            "Támogatott": "{:,.3f}",
+            "Nem támogatott": "{:,.3f}",
+        }),
+        use_container_width=True
+    )
+
+else:
+    # ---- MINDEN NACE1: egy sor / ágazat, sok oszlop (mint korábban) ----
+    stats_cols = [
+        "Ágazat",
+        "Átlag (kapott)", "SE (kapott)", "n (kapott)",
+        "Alsó 95% CI (kapott)", "Felső 95% CI (kapott)",
+        "Átlag (nem kapott)", "SE (nem kapott)", "n (nem kapott)",
+        "Alsó 95% CI (nem kapott)", "Felső 95% CI (nem kapott)",
+    ]
+    stats_table = result[stats_cols].copy()
+
+    st.dataframe(
+        stats_table.style.format({
+            "Átlag (kapott)": "{:,.3f}",
+            "SE (kapott)": "{:,.3f}",
+            "n (kapott)": "{:,.0f}",
+            "Alsó 95% CI (kapott)": "{:,.3f}",
+            "Felső 95% CI (kapott)": "{:,.3f}",
+            "Átlag (nem kapott)": "{:,.3f}",
+            "SE (nem kapott)": "{:,.3f}",
+            "n (nem kapott)": "{:,.0f}",
+            "Alsó 95% CI (nem kapott)": "{:,.3f}",
+            "Felső 95% CI (nem kapott)": "{:,.3f}",
+        }),
+        use_container_width=True
+    )
+
+st.caption(
+    "A konfidencia-intervallumok 95%-os szinten, normál-közelítéssel, ±1.96·SE alapján számítódnak."
+)
+
+
+
+# --------------------------- Hipotézisek (középre, „egyenlet-szerűen”) ---------------------------
+st.markdown("---")
+st.markdown("<div style='text-align:center; font-size:1.1em;'><b>Hipotézisek</b></div>", unsafe_allow_html=True)
+
+st.latex(r"H_0: \mu_{\text{támogatott}} = \mu_{\text{nem támogatott}}")
+st.latex(r"H_A: \mu_{\text{támogatott}} \neq \mu_{\text{nem támogatott}}")
+
+# --------------------------- 2. táblázat: t-próba eredményei ---------------------------
+st.markdown("---")
+st.subheader("Hipotézisvizsgálat: t-próba eredményei")
+
+test_table = result[["Ágazat", "t-érték", "p-érték", "N"]].copy()
 
 st.dataframe(
-    result.style.format({
-        "Átlag (kapott)": "{:,.3f}",
-        "SE (kapott)": "{:,.3f}",
-        "Átlag (nem kapott)": "{:,.3f}",
-        "SE (nem kapott)": "{:,.3f}",
+    test_table.style.format({
         "t-érték": "{:,.3f}",
         "p-érték": "{:,.3f}",
-        "n (kapott)": "{:,.0f}",
-        "n (nem kapott)": "{:,.0f}",
         "N": "{:,.0f}",
     }),
     use_container_width=True
 )
 
 caption_extra = []
+# log & szűrés jelzése maradhat, ha a fenti változók megvannak a scriptben:
 if use_log_y:
     caption_extra.append("A teszt és az átlagok ln-skálán értendők.")
-if y_filter != "Nincs szűrés":
-    caption_extra.append(f"Szélsőérték-kezelés Y-ra: {y_filter}.")
+if tail_mode != "Nincs szűrés":
+    caption_extra.append(f"Szélsőérték-kezelés Y-ra: {tail_mode}.")
+
 if caption_extra:
     st.caption(" ".join(caption_extra))
 
 st.caption(
-    "H₀: a kiválasztott változó átlaga azonos a támogatást kapott és nem kapott vállalatok között "
-    "(Welch-féle kétmintás t-próba, kétoldali)."
+    "Welch-féle kétmintás t-próba, kétoldali teszt. "
+    "H₀ szerint a kiválasztott változó átlaga azonos a támogatást kapott és nem kapott vállalatok között."
 )
