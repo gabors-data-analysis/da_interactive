@@ -11,12 +11,12 @@ real_data = st.session_state.get('real_data', False)
 
 if real_data:
     st.set_page_config(
-        page_title='Korrelációk NACE1 szinten — Vállalatok (HU keresztmetszet)',
+        page_title='Korrelációk Ágazatonként — Vállalatok (HU keresztmetszet)',
         layout='wide'
     )
 else:
     st.set_page_config(
-        page_title='Korrelációk NACE1 szinten — Vállalatok (HU keresztmetszet, szimulált)',
+        page_title='Korrelációk Ágazatonként — Vállalatok (HU keresztmetszet, szimulált)',
         layout='wide'
     )
 
@@ -148,9 +148,9 @@ col_left, col_right = st.columns([4, 1])
 
 with col_left:
     if real_data:
-        st.title('Korrelációk NACE1 szinten — 2019 keresztmetszet')
+        st.title('Korrelációk Ágazatonként — 2019 keresztmetszet')
     else:
-        st.title('Korrelációk NACE1 szinten — 2019 keresztmetszet (szimulált)')
+        st.title('Korrelációk Ágazatonként — 2019 keresztmetszet (szimulált)')
 
 with col_right:
     logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
@@ -189,7 +189,7 @@ yvar = available[y_label]
 
 sort_choice = st.sidebar.radio(
     "Rendezés a táblázatban",
-    ["NACE1 kód szerint", "Korreláció szerint (csökkenő)"],
+    ["Ágazat szerint", "Korreláció szerint (csökkenő)"],
     index=0
 )
 

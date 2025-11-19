@@ -17,12 +17,12 @@ color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 real_data = st.session_state.get('real_data', False)
 if real_data:
     st.set_page_config(
-        page_title='Átlagteszt támogatott / nem támogatott — NACE1 csoportok',
+        page_title='Átlagteszt támogatott / nem támogatott — Ágazatonként',
         layout='wide'
     )
 else:
     st.set_page_config(
-        page_title='Átlagteszt támogatott / nem támogatott — NACE1 csoportok (szimulált)',
+        page_title='Átlagteszt támogatott / nem támogatott — Ágazatonként(szimulált)',
         layout='wide'
     )
 
@@ -139,9 +139,9 @@ col_left, col_right = st.columns([4, 1])
 
 with col_left:
     if real_data:
-        st.title('Átlagteszt támogatott / nem támogatott — NACE1 csoportok, 2019 keresztmetszet')
+        st.title('Átlagteszt támogatott / nem támogatott — Ágazatonként, 2019 keresztmetszet')
     else:
-        st.title('Átlagteszt támogatott / nem támogatott — NACE1 csoportok, 2019 keresztmetszet (szimulált)')
+        st.title('Átlagteszt támogatott / nem támogatott — Ágazatonként, 2019 keresztmetszet (szimulált)')
 
 with col_right:
     logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
@@ -152,7 +152,7 @@ st.markdown(
     "Válasszon egy **folytonos változót**. A teszt H₀ hipotézise: "
     "a változó átlaga **azonos** a támogatást kapott és nem kapott vállalatoknál. "
     "Hₐ: az átlagok **nem egyenlőek** (kétoldali teszt). "
-    "Az eredmények NACE1 csoportonként számolódnak."
+    "Az eredmények ágazatonként számolódnak."
 )
 
 # --------------------------- Oldalsáv (változó, NACE1, log, scope) ---------------------------
@@ -169,7 +169,7 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 
 # NACE1 baseline választás
 sector_options = ["Összes ágazat"] + [NACE1_LABELS[k] for k in LABELS if k in NACE1_LABELS]
-sel_label = st.sidebar.selectbox("NACE1 csoport (baseline sorhoz)", sector_options, index=0)
+sel_label = st.sidebar.selectbox("Ágazat (baseline sorhoz)", sector_options, index=0)
 scope_all = sel_label == "Összes ágazat"
 
 # Log skála (ln)
@@ -178,7 +178,7 @@ use_log_y = st.sidebar.checkbox("Y log skála (ln)", value=False)
 # Eredmény típusa
 scope_mode = st.sidebar.radio(
     "Eredmény típusa",
-    ["Csak kiválasztott NACE1 csoport", "Minden NACE1 csoport külön (plusz összes)"],
+    ["Csak kiválasztott ágazat", "Minden ágazat külön (plusz összes)"],
     index=0
 )
 
@@ -274,7 +274,7 @@ if missing_cols:
 
 df = df[needed_cols].dropna(subset=[yvar, "has_grant", "nace1_code"])
 if df.empty:
-    st.error("Nincs olyan megfigyelés, ahol a kiválasztott változó, a támogatottság és a NACE1 kód is ismert.")
+    st.error("Nincs olyan megfigyelés, ahol a kiválasztott változó, a támogatottság és az ágazati kód is ismert.")
     st.stop()
 
 # pénzügyi skálázás (millió Ft -> /1000)
@@ -359,7 +359,7 @@ baseline_row = pd.DataFrame({
     "N": [baseline_stats["N"]],
 })
 
-if scope_mode == "Csak kiválasztott NACE1 csoport":
+if scope_mode == "Csak kiválasztott ágazat":
     result = baseline_row
 else:
     by_ind = df.groupby("nace1_code", observed=True).apply(one_ttest).reset_index()
@@ -405,7 +405,7 @@ result["Felső 95% CI (nem kapott)"] = result["Átlag (nem kapott)"] + 1.96 * re
 # --------------------------- 1. táblázat: mintaösszehasonlítás ---------------------------
 st.subheader("Mintaösszehasonlítás: átlagok és 95%-os konfidencia-intervallumok")
 
-if scope_mode == "Csak kiválasztott NACE1 csoport":
+if scope_mode == "Csak kiválasztott ágazat":
     # ---- EGY NACE1: nincs Ágazat oszlop, csak statisztikák soronként ----
     r = result.iloc[0]
 
