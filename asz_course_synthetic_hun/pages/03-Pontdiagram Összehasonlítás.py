@@ -39,7 +39,7 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
     df["nace2_name_code"] = df["nace2_name_code"].astype(str)
     return df
 
-cs = load_cross_section()
+cs = load_cross_section(st.session_state['data_path'])
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 col_left, col_right = st.columns([4, 1])
@@ -57,7 +57,12 @@ with col_right:
         st.image(str(logo_path), use_container_width=True)
 
 
-
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
 st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
 

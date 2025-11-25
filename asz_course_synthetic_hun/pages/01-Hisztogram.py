@@ -42,7 +42,13 @@ with col_right:
     logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
     if logo_path.exists():
         st.image(str(logo_path), use_container_width=True)
-
+    
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
 st.markdown("Válasszon egy **ágazatot** és egy **változót** a megjelenítéshez. A pénzügyi adatok **millió forintban** szerepelnek.")
 
 # ----------------------------- Sidebar -----------------------------

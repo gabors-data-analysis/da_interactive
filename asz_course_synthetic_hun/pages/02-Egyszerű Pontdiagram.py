@@ -35,10 +35,22 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
         st.stop()
     df["nace2"] = df["nace2"].astype(str)
     df["nace2_name_code"] = df["nace2_name_code"].astype(str)
+
+    reg_outcomes = {"sales_growth_perc","sales_growth_log_diff"}
+    missing = reg_outcomes - set(df.columns)
+    if missing:
+        df["sales_growth_perc"] = (df["sales_lead_sim"] - df["sales_clean"]) / df["sales_clean"] * 100
+        df["sales_growth_log_diff"] = df["ln_sales_lead_sim"] - df["ln_sales"]
+    
+    else:
+        df["sales_growth_perc"] = df["sales_growth_perc"] * 100
+    
+
     return df
 
 
-cs = load_cross_section()
+cs = load_cross_section(st.session_state['data_path'])
+
 
 # ----------------------- UI: fejlécek ------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -56,7 +68,12 @@ with col_right:
     if logo_path.exists():
         st.image(str(logo_path), use_container_width=True)
 
-
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
 st.markdown("Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
 
@@ -103,14 +120,16 @@ else:
     }
 
 NON_MONETARY_VARS = {
+    "Relatív növekedés (%)":"sales_growth_perc",
+    "Log növekedés (log-diff)":"sales_growth_log_diff",
     'Foglalkoztatottak száma (fő)': 'emp',
     'Kor (év)': 'age',
 }
-var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
+var_map = { **NON_MONETARY_VARS,**MONETARY_VARS}
 
 available = {k: v for k, v in var_map.items() if v in cs.columns}
-x_label = st.sidebar.selectbox("X változó", list(available.keys()), index=0)
-y_label = st.sidebar.selectbox("Y változó", list(available.keys()), index=min(4, len(available)-1))
+x_label = st.sidebar.selectbox("X változó", list(available.keys()), index=2)
+y_label = st.sidebar.selectbox("Y változó", list(available.keys()), index=0)
 xvar = available[x_label]
 yvar = available[y_label]
 x_is_monetary = xvar in MONETARY_VARS.values()
@@ -126,7 +145,7 @@ FILTER_OPTIONS = [
 
 st.sidebar.subheader("Szélsőérték-kezelés")
 x_filter = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-# y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
 df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
 df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
@@ -137,29 +156,54 @@ if x_is_monetary:
 if y_is_monetary:
     df[yvar] = df[yvar] / 1000.0
 
+# Manuális X-határok (változó egységében)
 if x_filter == "Kézi minimum/maximum":
-    st.sidebar.markdown("**Kézi határok (a megjelenített egységben)**")
-    current_min = float(np.nanmin(df[xvar]))
-    current_max = float(np.nanmax(df[xvar]))
+    st.sidebar.markdown("**X kézi határok (a megjelenített egységben)**")
+    current_min_x = float(np.nanmin(df[xvar]))
+    current_max_x = float(np.nanmax(df[xvar]))
     x_low_manual = st.sidebar.number_input(
-        "Minimum",
-        value=current_min,
-        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+        "X minimum",
+        value=current_min_x,
+        step=(current_max_x - current_min_x)/100 if current_max_x > current_min_x else 1.0
     )
     x_high_manual = st.sidebar.number_input(
-        "Maximum",
-        value=current_max,
-        step=(current_max - current_min)/100 if current_max > current_min else 1.0
+        "X maximum",
+        value=current_max_x,
+        step=(current_max_x - current_min_x)/100 if current_max_x > current_min_x else 1.0
     )
     if x_low_manual > x_high_manual:
-        st.sidebar.error("A minimum nem lehet nagyobb a maximum­nál.")
-        manual_min, manual_max = x_high_manual, x_low_manual
+        st.sidebar.error("X esetén a minimum nem lehet nagyobb a maximumnál.")
+        x_low_manual, x_high_manual = x_high_manual, x_low_manual
 else:
     x_low_manual = None
     x_high_manual = None
 
+# Manuális Y-határok (változó egységében)
+if y_filter == "Kézi minimum/maximum":
+    st.sidebar.markdown("**Y kézi határok (a megjelenített egységben)**")
+    current_min_y = float(np.nanmin(df[yvar]))
+    current_max_y = float(np.nanmax(df[yvar]))
+    y_low_manual = st.sidebar.number_input(
+        "Y minimum",
+        value=current_min_y,
+        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+    )
+    y_high_manual = st.sidebar.number_input(
+        "Y maximum",
+        value=current_max_y,
+        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+    )
+    if y_low_manual > y_high_manual:
+        st.sidebar.error("Y esetén a minimum nem lehet nagyobb a maximumnál.")
+        y_low_manual, y_high_manual = y_high_manual, y_low_manual
+else:
+    y_low_manual = None
+    y_high_manual = None
+
 # ----------------------- Bin scatter opció (új) -----------------------
 st.sidebar.subheader("Ábra beállítások")
+fig_width = st.sidebar.slider("Ábra szélessége", 4.0, 16.0, 8.0, 0.5)
+fig_height = st.sidebar.slider("Ábra magassága", 2.0, 8.0, 4.0, 0.5)
 BIN_SCATTER_OPTIONS = [
     "Eredeti",
     "5 bin",
@@ -176,6 +220,8 @@ bin_scatter_map = {
 }
 n_bins = bin_scatter_map.get(bin_scatter_choice, None)
 use_bin_scatter = n_bins is not None
+
+# --- NEW: plot size controls (inches) ---
 
 # ----------------------- Illesztés ---------------------------
 fit_type = st.sidebar.selectbox(
@@ -228,13 +274,15 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
         return s[(s > q_low) & (s < q_high)]
 
     if mode == "Kézi minimum/maximum":
+        if low_val is None or high_val is None:
+            return s
         return s[(s > low_val) & (s < high_val)]
 
     return s
 
 
 x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
-y = df[yvar]
+y = apply_filter(df[yvar], y_filter, y_low_manual, y_high_manual)
 
 # közös index a két sorozatra
 idx = x.index.intersection(y.index)
@@ -245,8 +293,6 @@ if plot_df.empty:
     st.stop()
 
 # ----------------------- Bin scatter előkészítés -----------------------
-# Az illesztések továbbra is az egyedi megfigyeléseken futnak (plot_df),
-# a pontdiagram viszont használhat binelt adatot (scatter_df).
 scatter_df = plot_df.copy()
 if use_bin_scatter and len(plot_df) >= 2:
     try:
@@ -255,7 +301,6 @@ if use_bin_scatter and len(plot_df) >= 2:
         scatter_df = gb_scatter[[xvar, yvar]].mean().reset_index(drop=True)
         plot_df.drop(columns="__bin_scatter", inplace=True)
     except Exception:
-        # hiba esetén marad az eredeti pontdiagram
         scatter_df = plot_df.copy()
 
 # ----------------------- Transzformációk (fit a transzformált térben) -----------------------
@@ -276,7 +321,7 @@ def inv_y(v):
 
 
 # ----------------------- Ábra -----------------------------
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 sns.scatterplot(
     data=scatter_df, x=xvar, y=yvar, s=size, alpha=alpha,
     edgecolor='white', linewidth=0.2, color=color[0], ax=ax
@@ -295,14 +340,12 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
     coef = np.polyfit(xx_sorted, yy_sorted, deg=deg)
     poly = np.poly1d(coef)
 
-    # Rajzolás: x rács az EREDETI skálán, de a fit a transzformáltban készül
     xs_orig = np.linspace(plot_df[xvar].min(), plot_df[xvar].max(), 400)
     xs_tr = fwd_x(xs_orig)
     ys_tr = poly(xs_tr)
     ys_orig = inv_y(ys_tr)
     ax.plot(xs_orig, ys_orig, color=color[1], linewidth=2, alpha=0.9, label=f"{fit_type} illesztés")
 
-    # Koef szöveg a transzformált tér egyenletére (ez „lineáris” ott)
     if deg == 1:
         a, b = coef[1], coef[0]
         trafo_note = []
@@ -333,23 +376,16 @@ elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
     x_tr = fwd_x(plot_df[xvar].values)
     y_tr = fwd_y(plot_df[yvar].values)
     z = lowess(y_tr, x_tr, frac=0.25, return_sorted=True)
-    # vissza eredeti skálára a plothoz
     x_orig = inv_x(z[:, 0])
     y_orig = inv_y(z[:, 1])
     ax.plot(x_orig, y_orig, color=color[1], linewidth=2, alpha=0.9, label="LOWESS illesztés")
 
 elif fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     steps = 5 if "5" in fit_type else 20
-    # Binnelés mindig az eredeti X skálán történik (kvantilisek),
-    # de az Y átlagát a transzformált térben számoljuk, majd visszatranszformáljuk,
-    # hogy a „vonal” a log skálán is értelmes legyen.
     plot_df["__bin"] = pd.qcut(plot_df[xvar], q=steps, duplicates="drop")
     gb = plot_df.groupby("__bin", observed=True)
-    # X határok az eredeti skálán
     bin_edges = gb[xvar].agg(x_min="min", x_max="max")
-    # Y átlag a transzformált térben
     y_mean_tr = fwd_y(gb[yvar].mean())
-    # vissza eredeti skálára
     y_mean = inv_y(y_mean_tr)
     bin_stats = pd.concat(
         [bin_edges, y_mean.rename("y_mean")],
@@ -373,10 +409,8 @@ ax.spines[['top', 'right']].set_visible(False)
 
 # --- X axis ---
 if logx:
-    # log scale with base e
     ax.set_xscale('log', base=np.e)
     ax.xaxis.set_major_locator(LogLocator(base=np.e))
-    # show ln(x) as tick labels
     ax.xaxis.set_major_formatter(
         FuncFormatter(lambda v, _: f"{np.log(v):.2f}")  # ln(v)
     )
@@ -392,13 +426,12 @@ ax.tick_params(axis='x', labelrotation=25)
 if logy:
     ax.set_yscale('log', base=np.e)
     ax.yaxis.set_major_locator(LogLocator(base=np.e))
-    # show ln(y) as tick labels
     ax.yaxis.set_major_formatter(
         FuncFormatter(lambda v, _: f"{np.log(v):.2f}")
     )
 else:
     ax.yaxis.set_major_formatter(
-        FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.0f}")
+        FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.2f}")
     )
 
 if logx:
@@ -423,19 +456,18 @@ def tail_note_txt(mode, low=None, high=None):
         return "winsor 2–98%"
     if mode == "Levágás top–bottom 2%":
         return "levágás 2–98%"
-    if mode == "Kézi minimum/maximum":
+    if mode == "Kézi minimum/maximum" and low is not None and high is not None:
         return f"levágás {low:.1f}–{high:.1f}"
     return "—"
 
 
 tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
+tail_note_y = tail_note_txt(y_filter, y_low_manual, y_high_manual)
 bin_note = bin_scatter_choice
 
 st.markdown(
-    f"**Minta:** {scope_label} · **X:** `{x_label}` · **Y:** `{y_label}` · "
-    #f"**Megfigyelések:** {len(plot_df):,} · **Szélső értékek (X/Y):** {tail_note_x} · "
-    #f"**Illesztés:** {fit_type} · **Log (X/Y):** {logx} / {logy} · "
-    #f"**Bin scatter:** {bin_note}"
+    f"**Minta:** {scope_label} · **X:** `{x_label}` · **Y:** `{y_label}`"
+    # + f" · **Szélső értékek (X/Y):** {tail_note_x} / {tail_note_y} · **Bin scatter:** {bin_note}"
 )
 
 if coef_text is not None:

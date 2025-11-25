@@ -118,7 +118,12 @@ with col_right:
         st.image(str(logo_path), use_container_width=True)
 
 
-
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
 st.markdown(
     "Válasszon egy **kategóriás/dummy** X-változót és egy **folytonos** Y-változót. "
     "Az ábra a Y eloszlását mutatja az X kategóriái szerint, "
