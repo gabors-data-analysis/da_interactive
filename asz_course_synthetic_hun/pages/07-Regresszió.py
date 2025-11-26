@@ -391,15 +391,28 @@ if dwork.empty:
 # ------------------------------------------------------
 X_parts = []
 
-for v in cont_vars:
-    x = pd.to_numeric(dwork[v], errors="coerce").astype(float)
-    X_parts.append(x.rename(v))
-    if v in quad_set:
-        X_parts.append((x**2).rename(f"{v}^2"))
-    if v in log_set:
-        x_pos = x.where(x > 0, np.nan)
-        X_parts.append(np.log(x_pos).rename(f"log({v})"))
+X_parts = []
 
+for v in cont_vars:
+    x_raw = pd.to_numeric(dwork[v], errors="coerce").astype(float)
+
+    # If user chose log(v), then use ONLY log(v) (no original).
+    if v in log_set:
+        x_trans = x_raw.where(x_raw > 0, np.nan)
+        x_trans = np.log(x_trans)
+        base_name = f"log({v})"
+    else:
+        x_trans = x_raw
+        base_name = v
+
+    # Add the (possibly transformed) base variable
+    X_parts.append(x_trans.rename(base_name))
+
+    # If user asked for a quadratic term, it’s the square of the variable actually used.
+    # So with log selected, this will be [log(v)]²; without log, it’s v².
+    if v in quad_set:
+        X_parts.append((x_trans**2).rename(f"{base_name}^2"))
+        
 dummy_cache = {}
 for v in cat_vars:
     dummies = pd.get_dummies(
