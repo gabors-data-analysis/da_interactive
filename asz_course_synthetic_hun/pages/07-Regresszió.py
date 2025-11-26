@@ -111,8 +111,8 @@ Válasszon **ágazatot**, **kimeneti változót** és **magyarázó változókat
 
 Támogatott kimenetek:
 
-- **Relatív növekedés**: (sales_lead − sales) / sales  
-- **Lognövekedés**: ln(sales_lead) − ln(sales)
+- **Relatív növekedés**: (Árbevétel_2021 - Árbevétel_2019) / Árbevétel_2019  
+- **Lognövekedés**: ln(Árbevétel_2021) − ln(Árbevétel_2019)
 """
 )
 
@@ -412,7 +412,7 @@ for v in cont_vars:
     # So with log selected, this will be [log(v)]²; without log, it’s v².
     if v in quad_set:
         X_parts.append((x_trans**2).rename(f"{base_name}^2"))
-        
+
 dummy_cache = {}
 for v in cat_vars:
     dummies = pd.get_dummies(
@@ -466,6 +466,9 @@ X = sm.add_constant(X, has_constant="add")
 model = sm.OLS(Y.astype(float), X.astype(float))
 res = model.fit(cov_type="HC1")
 
+# ------------------------------------------------------
+# Szépített journal-style kimenet, label-ekkel
+# ------------------------------------------------------
 # ------------------------------------------------------
 # Szépített journal-style kimenet, label-ekkel
 # ------------------------------------------------------
@@ -532,16 +535,30 @@ def prettify_name(name: str) -> str:
 
     return name.replace("_", " ")
 
+# --- build Stargazer-like rows: coef row, then SE row ---
 rows = []
 for term in res.params.index:
     coef = res.params[term]
     se   = res.bse[term]
     pval = res.pvalues[term]
+
     coef_str = f"{fmt_coef(coef)}{sig_stars(pval)}"
     se_str   = f"({fmt_se(se)})"
-    rows.append((prettify_name(term), coef_str, se_str))
 
-table_df = pd.DataFrame(rows, columns=["Változó", "1. modell", "SE"])
+    # first row: variable name + coefficient
+    rows.append((prettify_name(term), coef_str))
+    # second row: empty variable name + SE
+    rows.append(("", se_str))
+
+# optional blank row before summary stats
+rows.append(("", ""))
+
+# --- summary rows: N and R² ---
+n_obs = int(res.nobs)
+rows.append(("Megfigyelések", f"{n_obs:,}".replace(",", " ")))
+rows.append(("R²", f"{res.rsquared:.3f}"))
+
+table_df = pd.DataFrame(rows, columns=["Változó", ""])
 
 css = """
 <style>
@@ -551,23 +568,43 @@ css = """
     margin-top: 0.5rem;
     margin-bottom: 1.5rem;
 }
+
 .reg-table {
     border-collapse: collapse;
     font-size: 0.9rem;
     font-family: "Times New Roman", serif;
     max-width: 650px;
+    border: none;
 }
+
+/* remove all borders by default */
+.reg-table th,
+.reg-table td {
+    border: none;
+}
+
+/* header: single line underneath */
 .reg-table thead tr th {
-    border-bottom: 1px solid #000;
     padding: 4px 10px;
+    border-bottom: 1px solid #000;
 }
+
+/* body cells: NO borders between variables */
 .reg-table tbody tr td {
     padding: 2px 10px;
-    border-bottom: 1px solid #ddd;
 }
+
+/* line ABOVE summary stats (N row = 2nd from last) */
+.reg-table tbody tr:nth-last-child(2) td {
+    border-top: 1px solid #000;
+}
+
+/* line BELOW last row (R²) */
 .reg-table tbody tr:last-child td {
     border-bottom: 1px solid #000;
 }
+
+/* alignment */
 .reg-table th:first-child,
 .reg-table td:first-child {
     text-align: left;
@@ -579,6 +616,8 @@ css = """
 </style>
 """
 
+
+
 html_table = table_df.to_html(
     index=False,
     classes="reg-table",
@@ -588,8 +627,6 @@ html_table = table_df.to_html(
 
 st.markdown(css + f'<div class="reg-table-container">{html_table}</div>', unsafe_allow_html=True)
 
-# ----------------- Meta-információk -----------------
-st.markdown(f"**R²:** {res.rsquared:.3f}")
 
 note = "Zárójelben a robusztus (HC1) standard hibák szerepelnek."
 
@@ -616,6 +653,6 @@ st.markdown(
 )
 
 st.markdown(
-    f"<span style='font-size:0.85rem'><em>Kategóriák referencia-szintjei (drop-first):</em> {baselines_text}</span>",
+    f"<span style='font-size:0.85rem'><em>Kategóriák referencia-szintjei (együttható nélkül):</em> {baselines_text}</span>",
     unsafe_allow_html=True,
 )

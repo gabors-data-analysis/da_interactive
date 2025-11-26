@@ -202,8 +202,7 @@ else:
 
 # ----------------------- Bin scatter opció (új) -----------------------
 st.sidebar.subheader("Ábra beállítások")
-fig_width = st.sidebar.slider("Ábra szélessége", 4.0, 16.0, 8.0, 0.5)
-fig_height = st.sidebar.slider("Ábra magassága", 2.0, 8.0, 4.0, 0.5)
+
 BIN_SCATTER_OPTIONS = [
     "Eredeti",
     "5 bin",
@@ -232,13 +231,18 @@ fit_type = st.sidebar.selectbox(
 if fit_type == "LOWESS" and not HAS_LOWESS:
     st.sidebar.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
 
-# Plot megjelenés
-alpha = st.sidebar.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
-size = st.sidebar.slider("Pontméret", 5, 100, 20, 1)
+
 
 # Log skálák
 logx = st.sidebar.checkbox("Logaritmikus skála X", value=False)
 logy = st.sidebar.checkbox("Logaritmikus skála Y", value=False)
+
+st.sidebar.subheader("Megjelenítés")
+fig_width = st.sidebar.slider("Ábra szélessége", 4.0, 16.0, 8.0, 0.5)
+fig_height = st.sidebar.slider("Ábra magassága", 2.0, 8.0, 4.0, 0.5)
+# Plot megjelenés
+alpha = st.sidebar.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
+size = st.sidebar.slider("Pontméret", 5, 100, 20, 1)
 
 # ----------------------- Szűrés és előkészítés ---------------------
 
@@ -382,26 +386,51 @@ elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
 
 elif fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     steps = 5 if "5" in fit_type else 20
-    plot_df["__bin"] = pd.qcut(plot_df[xvar], q=steps, duplicates="drop")
-    gb = plot_df.groupby("__bin", observed=True)
-    bin_edges = gb[xvar].agg(x_min="min", x_max="max")
-    y_mean_tr = fwd_y(gb[yvar].mean())
-    y_mean = inv_y(y_mean_tr)
-    bin_stats = pd.concat(
-        [bin_edges, y_mean.rename("y_mean")],
-        axis=1
-    ).reset_index(drop=True)
 
-    for _, r in bin_stats.iterrows():
-        ax.hlines(
-            y=r["y_mean"],
-            xmin=r["x_min"],
-            xmax=r["x_max"],
-            colors=color[1],
-            linewidth=3,
-            alpha=0.9
+    # 1. Quantile edges on filtered x
+    x_vals = plot_df[xvar].to_numpy()
+    q_grid = np.linspace(0, 1, steps + 1)
+    edges = np.quantile(x_vals, q_grid)
+
+    # 2. Keep only strictly increasing edges (positive-width bins)
+    edges_clean = [edges[0]]
+    for e in edges[1:]:
+        if e > edges_clean[-1]:
+            edges_clean.append(e)
+
+    if len(edges_clean) <= 1:
+        st.warning("Lépcsős illesztés: nem sikerült pozitív szélességű kvantilis bin-eket képezni.")
+    else:
+        bins = np.array(edges_clean)
+
+        # 3. Cut using our quantile bins; bins are Interval objects
+        plot_df["__bin"] = pd.cut(
+            plot_df[xvar],
+            bins=bins,
+            include_lowest=True
         )
-    plot_df.drop(columns="__bin", inplace=True)
+
+        gb = plot_df.groupby("__bin", observed=False)
+
+        # mean y in transformed space
+        y_mean_tr = fwd_y(gb[yvar].mean())
+        y_mean = inv_y(y_mean_tr)
+
+        # 4. Draw a segment from bin.left to bin.right for each non-empty bin
+        for interval, y_m in y_mean.dropna().items():
+            left = interval.left
+            right = interval.right
+            ax.hlines(
+                y=y_m,
+                xmin=left,
+                xmax=right,
+                colors=color[1],
+                linewidth=3,
+                alpha=0.9
+            )
+
+        plot_df.drop(columns="__bin", inplace=True)
+
 
 ax.set_xlabel(x_label)
 ax.set_ylabel(y_label)
@@ -444,6 +473,32 @@ if fit_type != "Nincs":
 
 plt.tight_layout()
 st.pyplot(fig)
+
+# ---------- Bin boundary table for stepwise fits (no duplicate dropping) ----------
+if fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
+    steps = 5 if "5" in fit_type else 20
+
+    # Use the x-values actually used for the fit (after all filters)
+    x_vals = plot_df[xvar].to_numpy()
+
+    # Quantile positions for the requested number of bins
+    q_grid = np.linspace(0, 1, steps + 1)
+
+    # Bin edges by quantiles (this keeps duplicates!)
+    edges = np.quantile(x_vals, q_grid)
+
+    bin_table = pd.DataFrame({
+        "Rekesz": np.arange(1, steps + 1),
+        "Alsó Határ": edges[:-1],
+        "Felső Határ": edges[1:]
+    })
+
+    st.markdown("**Lépcsős illesztés – Rekeszhatárok:**")
+    st.dataframe(bin_table.style.format({
+        "Alsó Határ": "{:.3f}",
+        "Felső Határ": "{:.3f}",
+    }))
+
 
 # ----------------------- Összegzés --------------------------
 scope_label = sel_label
