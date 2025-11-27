@@ -225,7 +225,7 @@ use_bin_scatter = n_bins is not None
 # ----------------------- Illesztés ---------------------------
 fit_type = st.sidebar.selectbox(
     "Illesztés rárajzolása (eredeti adaton, nem a bin-eken)",
-    ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsős (5 bin)", "Lépcsős (20 bin)"],
+    ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "Lépcsős (5 bin)", "Lépcsős (20 bin)"],
     index=0
 )
 if fit_type == "LOWESS" and not HAS_LOWESS:
@@ -487,17 +487,43 @@ if fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     # Bin edges by quantiles (this keeps duplicates!)
     edges = np.quantile(x_vals, q_grid)
 
+    # --- NEW: compute mean Y in each bin, using these edges ---
+    y_means = []
+    for i, (low, high) in enumerate(zip(edges[:-1], edges[1:])):
+        # Handle NaNs in edges gracefully
+        if np.isnan(low) or np.isnan(high):
+            y_means.append(np.nan)
+            continue
+
+        # Include lower bound; upper bound is open except (optionally) last bin
+        if i < len(edges) - 2:
+            mask = (plot_df[xvar] >= low) & (plot_df[xvar] < high)
+        else:
+            mask = (plot_df[xvar] >= low) & (plot_df[xvar] <= high)
+
+        y_vals = plot_df.loc[mask, yvar]
+        y_means.append(y_vals.mean() if not y_vals.empty else np.nan)
+
     bin_table = pd.DataFrame({
         "Rekesz": np.arange(1, steps + 1),
         "Alsó Határ": edges[:-1],
-        "Felső Határ": edges[1:]
+        "Felső Határ": edges[1:],
+        f"{y_label} átlag": y_means,   # <- NEW COLUMN
     })
 
-    st.markdown("**Lépcsős illesztés – Rekeszhatárok:**")
-    st.dataframe(bin_table.style.format({
+    st.markdown("**Lépcsős illesztés – Rekeszhatárok és bin-átlagok (Y):**")
+
+    # Formatting: pénzügyi Y változó esetén ezres csoportosítás, különben 3 tizedes
+    format_dict = {
         "Alsó Határ": "{:.3f}",
         "Felső Határ": "{:.3f}",
-    }))
+    }
+    if y_is_monetary:
+        format_dict[f"{y_label} átlag"] = "{:,.2f}"
+    else:
+        format_dict[f"{y_label} átlag"] = "{:.3f}"
+
+    st.dataframe(bin_table.style.format(format_dict))
 
 
 # ----------------------- Összegzés --------------------------
