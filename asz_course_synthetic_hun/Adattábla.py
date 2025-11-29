@@ -1,18 +1,58 @@
 # home.py
-import streamlit as st
-import pandas as pd
-import numpy as np
+
+import atexit
+from os import environ, path
+from shutil import rmtree
+from tempfile import mkdtemp
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import requests
+from cryptography.fernet import Fernet
+
+import streamlit as st
 
 st.set_page_config(page_title="Kezdőlap — Szimulált", layout="wide")
 
 # ---------------------------- Beállítás ----------------------------
-st.session_state['real_data'] = False
 
-if st.session_state['real_data'] == True:
-    st.session_state['data_path'] = "real_data/balance_cross_section_2019.parquet"
-else:
-    st.session_state['data_path'] = "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
+st.session_state["real_data"] = False
+BASE_DIR = Path(__file__).resolve().parent
+st.session_state["data_path"] = BASE_DIR / "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
+
+# Just for testing: 
+# st.session_state["data_path"] ="C:/Users/Barabás Dániel/work/balance_cross_section2019_to_export.parquet"
+st.session_state["ts_data"] = "data/synthetic/grant_time_series.csv"
+
+
+
+# temp folder for storing downloaded files
+temp_dir = mkdtemp()
+atexit.register(lambda: rmtree(temp_dir, ignore_errors=True))
+
+# download data from the provided URL and optionally decrypt it
+if environ.get("PARQUET_DOWNLOAD_URL"):
+    temp_file_path = path.join(temp_dir, "downloaded_data.parquet")
+    try:
+        with requests.get(environ.get("PARQUET_DOWNLOAD_URL"), stream=True) as response:
+            response.raise_for_status()
+            with open(temp_file_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+        if environ.get("PARQUET_DECRYPT_KEY"):
+            fernet = Fernet(environ.get("PARQUET_DECRYPT_KEY"))
+            with open(temp_file_path, "rb") as f:
+                encrypted = f.read()
+            decrypted = fernet.decrypt(encrypted)
+            with open(temp_file_path, "wb") as f:
+                f.write(decrypted)
+        st.session_state["real_data"] = True
+        st.session_state["data_path"] = temp_file_path
+    except Exception:
+        st.error("Error downloading data, falling back to synthetic data")
+
 
 # ---------------------------- Változónevek (HU -> belső) ----------------------------
 HUN_TO_INTERNAL = {
@@ -193,7 +233,16 @@ def make_demo_df(n_rows: int = 100) -> pd.DataFrame:
 df = make_demo_df()
 
 # ---------------------------- Rövid leírás -----------------------------
-st.title("Adattábla példa - Szimulált adatok")
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    st.title("Adattábla példa - Szimulált adatok")
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
 
 # ---------------------------- Változótípusok ---------------------------
 def classify_series(s: pd.Series) -> str:

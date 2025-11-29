@@ -28,10 +28,27 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
 cs = load_cross_section()
 
 # ----------------------------- Header ------------------------------
-if st.session_state['real_data']:
-    st.title('Eloszlások vizualizálása')
-else:
-    st.title('Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
+
+with col_left:
+    if st.session_state['real_data']:
+        st.title('Eloszlások vizualizálása')
+    else:
+        st.title('Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+    
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
 st.markdown("Válasszon egy **ágazatot** és egy **változót** a megjelenítéshez. A pénzügyi adatok **millió forintban** szerepelnek.")
 
 # ----------------------------- Sidebar -----------------------------
@@ -87,26 +104,6 @@ var_label = st.sidebar.selectbox('Megjelenítendő változó', available, index=
 var = var_map[var_label]
 is_monetary = var in MONETARY_VARS.values()
 
-# -------------------------- Tail handling (mutually exclusive) --------------------------
-st.sidebar.subheader("Szélsőérték kezelés")
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Winsor top–bottom 2%",
-    "Levágás top–bottom 2%",
-    "Kézi minimum/maximum"
-]
-tail_mode = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-
-
-
-# ----------------------------- Histogram settings -----------------------------
-st.sidebar.subheader('Hisztogram beállítások')
-bins = st.sidebar.slider('Binek száma', min_value=5, max_value=60, value=25, step=1)
-
-# ----------------------------- Log option -----------------------------
-st.sidebar.subheader('Skála')
-use_log = st.sidebar.checkbox('Logaritmikus eloszlás (log10 transzformáció)', value=False)
-
 # ----------------------------- Filter ------------------------------
 if selected_label == "Összes ágazat":
     workset = cs.copy()
@@ -131,6 +128,18 @@ if len(x) >= 5:
 else:
     q2, q98 = np.nanmin(x), np.nanmax(x)
 
+
+
+# -------------------------- Tail handling (mutually exclusive) --------------------------
+st.sidebar.subheader("Szélsőérték kezelés")
+FILTER_OPTIONS = [
+    "Nincs szűrés",
+    "Winsor top–bottom 2%",
+    "Levágás top–bottom 2%",
+    "Kézi minimum/maximum"
+]
+tail_mode = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+
 # Manual min/max controls (shown only when selected)
 if tail_mode == "Kézi minimum/maximum":
     st.sidebar.markdown("**Kézi határok (a megjelenített egységben)**")
@@ -146,6 +155,16 @@ if tail_mode == "Kézi minimum/maximum":
 else:
     manual_min = None
     manual_max = None
+
+# ----------------------------- Histogram settings -----------------------------
+st.sidebar.subheader('Hisztogram beállítások')
+bins = st.sidebar.slider('Binek száma', min_value=5, max_value=60, value=25, step=1)
+
+# ----------------------------- Log option -----------------------------
+st.sidebar.subheader('Skála')
+use_log = st.sidebar.checkbox('Logaritmikus eloszlás (ln transzformáció)', value=False)
+
+
 
 
 # Apply tail handling
@@ -166,10 +185,10 @@ if use_log:
     if not np.any(pos_mask):
         st.warning("Logaritmikus ábrázoláshoz pozitív értékek szükségesek. A szűrés után nem maradt pozitív érték.")
         st.stop()
-    if np.any(~pos_mask):
-        st.info(f"{np.count_nonzero(~pos_mask):,} nem-pozitív érték kizárva a log transzformáció miatt.")
-    x_plot = np.log10(x_filtered[pos_mask])
-    log_note = " (log10)"
+    #if np.any(~pos_mask):
+    #    st.info(f"{np.count_nonzero(~pos_mask):,} nem-pozitív érték kizárva a log transzformáció miatt.")
+    x_plot = np.log(x_filtered[pos_mask])
+    log_note = " (ln)"
 else:
     x_plot = x_filtered
 
@@ -189,7 +208,7 @@ widths = np.diff(edges)
 ax.bar(edges[:-1], counts_masked, width=widths, align='edge',
        color=color[0], edgecolor='white', linewidth=0.5)
 
-st.subheader(f'{var_label}{log_note} hisztogram — {bins} kosár (a <5 megfigyelésű oszlopok rejtve)')
+st.subheader(f'{var_label}{log_note} hisztogram — {bins} bin (a <5 megfigyelésű oszlopok rejtve)')
 
 # Axis labels & formatting
 ax.set_xlabel(f"{var_label}{log_note}")
@@ -253,7 +272,7 @@ elif tail_mode == "Kézi minimum/maximum":
 else:
     tail_note = "Nincs szűrés"
 
-unit_note = "millió Ft" if is_monetary and not use_log else ("log10 egység" if use_log else "nyers egység")
+unit_note = "millió Ft" if is_monetary and not use_log else ("ln egység" if use_log else "nyers egység")
 st.markdown(
     f"**Minta:** {scope_label} · **Változó:** `{var_label}` · "
     f"**Megfigyelések (megjelenítve):** {len(x_plot):,} · **Szélek:** {tail_note} · **Binek:** {bins} · "

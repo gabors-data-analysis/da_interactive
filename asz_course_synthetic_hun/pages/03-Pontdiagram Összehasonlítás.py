@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-from matplotlib.ticker import FuncFormatter
+from matplotlib.ticker import FuncFormatter, LogLocator
+import textwrap
 
 # Opcionális LOWESS
 try:
@@ -38,14 +39,32 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
     df["nace2_name_code"] = df["nace2_name_code"].astype(str)
     return df
 
-cs = load_cross_section()
+cs = load_cross_section(st.session_state['data_path'])
 
-if st.session_state['real_data'] == True:
-    st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet')
-else:
-    st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)')
+BASE_DIR = Path(__file__).resolve().parent.parent
+col_left, col_right = st.columns([4, 1])
 
-st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. A pénzügyi adatok **millió forintban** szerepelnek.")
+with col_left:
+    if st.session_state['real_data'] == True:
+        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet')
+    else:
+        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)')
+
+with col_right:
+    # logó a jobb felső sarokban
+    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+
+
+st.markdown(
+    """
+    Az adatok forrása **OPTEN**.  
+    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
+    """
+)
+st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. "
+            "A pénzügyi adatok **millió forintban** szerepelnek.")
 
 # ----------------------- Oldalsáv ---------------------------
 st.sidebar.header("Beállítások")
@@ -116,8 +135,27 @@ x_filter = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, i
 x_low_manual, x_high_manual = 2.0, 98.0
 y_low_manual, y_high_manual = 2.0, 98.0
 if x_filter == "Levágás (kézi megadás)":
-    x_low_manual = st.sidebar.number_input("X alsó percentil (%)", min_value=0.0, max_value=49.0, value=2.0, step=0.5)
-    x_high_manual = st.sidebar.number_input("X felső percentil (%)", min_value=51.0, max_value=100.0, value=98.0, step=0.5)
+    x_low_manual = st.sidebar.number_input("X alsó percentilis (%)", min_value=0.0, max_value=49.0, value=2.0, step=0.5)
+    x_high_manual = st.sidebar.number_input("X felső percentilis (%)", min_value=51.0, max_value=100.0, value=98.0, step=0.5)
+
+# ----------------------- Bin scatter opció (mint az első scriptben) -----------------------
+st.sidebar.subheader("Ábra beállítások")
+BIN_SCATTER_OPTIONS = [
+    "Eredeti",
+    "5 bin",
+    "10 bin",
+    "20 bin",
+    "100 bin"
+]
+bin_scatter_choice = st.sidebar.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
+bin_scatter_map = {
+    "5 bin": 5,
+    "10 bin": 10,
+    "20 bin": 20,
+    "100 bin": 100
+}
+n_bins = bin_scatter_map.get(bin_scatter_choice, None)
+use_bin_scatter = n_bins is not None
 
 # Illesztés típusa
 fit_type = st.sidebar.selectbox(
@@ -169,16 +207,16 @@ def apply_filter(series: pd.Series, mode: str, low_pct: float = 2.0, high_pct: f
     return s
 
 def fwd_x(v):
-    return np.log10(v) if logx else v
+    return np.log(v) if logx else v
 
 def inv_x(v):
-    return (10 ** v) if logx else v
+    return (np.exp(v)) if logx else v
 
 def fwd_y(v):
-    return np.log10(v) if logy else v
+    return np.log(v) if logy else v
 
 def inv_y(v):
-    return (10 ** v) if logy else v
+    return (np.exp(v)) if logy else v
 
 def tail_note_txt(mode, low=None, high=None):
     if mode == "Nincs szűrés":
@@ -208,7 +246,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         st.warning(f"Nincs adat a szűrés után: {title}")
         return None, None, 0
 
-    # szélsőérték-kezelés (új, 4 opció)
+    # szélsőérték-kezelés (X)
     x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
     y = df[yvar]
     idx = x.index.intersection(y.index)
@@ -217,10 +255,24 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         st.warning(f"Nincs adat a szélsőérték-kezelés után: {title}")
         return None, None, 0
 
+    # ----------------------- Bin scatter előkészítés -----------------------
+    # Illesztés mindig plot_df-en, a pontdiagram pedig scatter_df-en (binelt vagy eredeti)
+    scatter_df = plot_df.copy()
+    if use_bin_scatter and len(plot_df) >= 2:
+        try:
+            plot_df["__bin_scatter"] = pd.qcut(plot_df[xvar], q=n_bins, duplicates="drop")
+            gb_scatter = plot_df.groupby("__bin_scatter", observed=True)
+            scatter_df = gb_scatter[[xvar, yvar]].mean().reset_index(drop=True)
+            plot_df.drop(columns="__bin_scatter", inplace=True)
+        except Exception:
+            scatter_df = plot_df.copy()
+
     # Ábra
     fig, ax = plt.subplots()
-    sns.scatterplot(data=plot_df, x=xvar, y=yvar, s=size, alpha=alpha,
-                    edgecolor='white', linewidth=0.2, color=color[0], ax=ax)
+    sns.scatterplot(
+        data=scatter_df, x=xvar, y=yvar, s=size, alpha=alpha,
+        edgecolor='white', linewidth=0.2, color=color[0], ax=ax
+    )
 
     coef_text = None
     # Illesztések: a transzformált térben számolunk, majd visszatranszformálunk a rajzhoz
@@ -241,18 +293,18 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         # Egyenlet a transzformált térben
         if deg == 1:
             a, b = coef[1], coef[0]
-            xname = "log10(x)" if logx else "x"
-            yname = "log10(y)" if logy else "y"
+            xname = "ln(x)" if logx else "x"
+            yname = "ln(y)" if logy else "y"
             coef_text = f"{yname} = {a:.4g} + {b:.4g}·{xname}"
         elif deg == 2:
             a, b, c = coef[2], coef[1], coef[0]
-            xname = "log10(x)" if logx else "x"
-            yname = "log10(y)" if logy else "y"
+            xname = "ln(x)" if logx else "x"
+            yname = "ln(y)" if logy else "y"
             coef_text = f"{yname} = {a:.4g} + {b:.4g}·{xname} + {c:.4g}·{xname}²"
         else:
             a, b, c, d = coef[3], coef[2], coef[1], coef[0]
-            xname = "log10(x)" if logx else "x"
-            yname = "log10(y)" if logy else "y"
+            xname = "ln(x)" if logx else "x"
+            yname = "ln(y)" if logy else "y"
             coef_text = f"{yname} = {a:.4g} + {b:.4g}·{xname} + {c:.4g}·{xname}² + {d:.4g}·{xname}³"
 
     elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
@@ -279,21 +331,49 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         plot_df.drop(columns="__bin", inplace=True)
 
     # címkék & formázás
-    ax.set_title(title, loc='left', fontsize=14)
-    ax.set_xlabel(x_label); ax.set_ylabel(y_label)
+    wrapped_title = textwrap.fill(title, width=40)  # próbáld 35–45 között finomhangolni
+    ax.set_title(wrapped_title, loc='left', fontsize=12)
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     ax.spines[['top', 'right']].set_visible(False)
 
-    # tengelyek
-    ax.ticklabel_format(style='plain', axis='x')
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}" if x_is_monetary else f"{v:,.0f}"))
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.0f}"))
+    # --- X axis ---
+    if logx:
+        # log scale with base e
+        ax.set_xscale('log', base=np.e)
+        ax.xaxis.set_major_locator(LogLocator(base=np.e))
+
+        # show ln(x) as tick labels
+        ax.xaxis.set_major_formatter(
+            FuncFormatter(lambda v, _: f"{np.log(v):.2f}")  # ln(v)
+        )
+    else:
+        ax.ticklabel_format(style='plain', axis='x')
+        ax.xaxis.set_major_formatter(
+            FuncFormatter(lambda v, _: f"{v:,.2f}" if x_is_monetary else f"{v:,.0f}")
+        )
+
     ax.tick_params(axis='x', labelrotation=25)
 
-    # log skálák
-    if logx:
-        ax.set_xscale('log')
+    # --- Y axis ---
     if logy:
-        ax.set_yscale('log')
+        ax.set_yscale('log', base=np.e)
+        ax.yaxis.set_major_locator(LogLocator(base=np.e))
+
+        # show ln(y) as tick labels
+        ax.yaxis.set_major_formatter(
+            FuncFormatter(lambda v, _: f"{np.log(v):.2f}")
+        )
+    else:
+        ax.yaxis.set_major_formatter(
+            FuncFormatter(lambda v, _: f"{v:,.2f}" if y_is_monetary else f"{v:,.0f}")
+        )
+
+    if logx:
+        ax.set_xlabel(f"ln({x_label})")
+    if logy:
+        ax.set_ylabel(f"ln({y_label})")
 
     if fit_type != "Nincs":
         ax.legend(frameon=False)
@@ -310,7 +390,7 @@ with colA:
     if figA is not None:
         st.pyplot(figA)
         if coefA is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet (A, transzformált térben):** {coefA}")
+            st.markdown(f"**Illesztési egyenlet:** {coefA}")
 
 with colB:
     scope_B = filter_scope(cs, sel_label_B)
@@ -318,15 +398,16 @@ with colB:
     if figB is not None:
         st.pyplot(figB)
         if coefB is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet (B, transzformált térben):** {coefB}")
+            st.markdown(f"**Illesztési egyenlet:** {coefB}")
 
 # ----------------------- Lábléc összegzés -------------------
 tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
-#tail_note_y = tail_note_txt(y_filter, y_low_manual, y_high_manual)
+bin_note = bin_scatter_choice
 
 st.markdown(
     f"**Ágazatok:** A = {sel_label_A} · B = {sel_label_B} · "
-    f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
-    f"**Log (X/Y):** {logx} / {logy} · "
-    f"**Szélső értékek (X/Y):** {tail_note_x}"
+   # f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
+   # f"**Log (X/Y):** {logx} / {logy} · "
+   # f"**Szélső értékek (X/Y):** {tail_note_x} · "
+   # f"**Bin scatter:** {bin_note}"
 )
