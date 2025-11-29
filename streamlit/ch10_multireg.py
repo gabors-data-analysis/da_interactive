@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title='Ch. 10 - Multiple Linear Regression', layout="wide")
+st.set_page_config(page_title='Multiple Linear Regression', layout="wide")
 
 @st.cache_data
 def load_data():

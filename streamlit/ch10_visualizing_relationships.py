@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.title('Ch. 10 - Multiple Linear Regression')
+st.title('Interactive Multiple Linear Regression Analysis')
 
 st.markdown("""
 This dashboard helps you explore multiple linear regression analysis, as discussed in Chapter 10, using the `cps-earnings` dataset.

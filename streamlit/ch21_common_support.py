@@ -14,7 +14,7 @@ color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
 st.set_page_config(page_title="Common Support", layout="wide")
 
-st.title("Common Support")
+st.title("Understanding Common Support in Causal Inference")
 
 st.markdown("""
 ### Introduction

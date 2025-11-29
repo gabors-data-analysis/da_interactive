@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.title('Ch. 10 - Multiple Linear Regression')
+st.title('Interactive Multiple Linear Regression Analysis')
 
 st.markdown("""
 This dashboard helps you explore multiple linear regression analysis, as discussed in Chapter 10, using the `cps-earnings` dataset.
