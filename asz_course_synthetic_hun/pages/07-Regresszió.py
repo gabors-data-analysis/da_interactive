@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import statsmodels.api as sm
+from typing import List  # <-- added for lspline type hints
 
 # ------------------------------------------------------
 # Beállítások
@@ -25,29 +26,39 @@ with col_right:
 
 
 @st.cache_data
-def load_cs(path: str = st.session_state['data_path']) -> pd.DataFrame:
+def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFrame:
     p = Path(path)
     if not p.exists():
         st.error(f"Fájl nem található: {p}")
         st.stop()
     df = pd.read_parquet(p).copy()
-
-    if "nace2_name_code" not in df.columns:
-        st.error("Hiányzik a `nace2_name_code` oszlop az adatban.")
+    need = {"nace2", "nace2_name_code"}
+    missing = need - set(df.columns)
+    if missing:
+        st.error(f"Hiányzó oszlopok az adatban: {missing}")
         st.stop()
+    df["nace2"] = df["nace2"].astype(str)
+    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
 
-    if "nace2" in df.columns:
-        df["nace2"] = df["nace2"].astype(str)
+    reg_outcomes = {"sales_growth_perc","sales_growth_log_diff"}
+    missing = reg_outcomes - set(df.columns)
+    if missing:
+        df["sales_growth_perc"] = (df["sales_lead_sim"] - df["sales_clean"]) / df["sales_clean"] * 100
+        df["sales_growth_log_diff"] = df["ln_sales_lead_sim"] - df["ln_sales"]
+    
+    else:
+        df["sales_growth_perc"] = df["sales_growth_perc"] * 100
 
     if "sales_clean" in df.columns:
         df["ln_sales"] = np.log(np.clip(df["sales_clean"].astype(float), 1e-9, None))
 
     return df
 
-df = load_cs(st.session_state['data_path'])
+
+df = load_cross_section(st.session_state['data_path'])
 
 # ------------------------------------------------------
-# Változó-label szótárak (más dashboardokkal konzisztens)
+# Változó-label szótárak
 # ------------------------------------------------------
 if st.session_state['real_data'] == True:
     MONETARY_VARS = {
@@ -82,23 +93,67 @@ NON_MONETARY_VARS = {
     "Kor (év)": "age",
 }
 
-# Fordított mapping: oszlopnév -> label (alapértelmezett)
 VAR_LABELS_BY_COL = {}
 for label, col in {**MONETARY_VARS, **NON_MONETARY_VARS}.items():
     VAR_LABELS_BY_COL[col] = label
 
-# Kézi label további változókra
 VAR_LABELS_BY_COL.update({
     "emp_size": "Foglalkoztatási méretkategória",
     "firm_owner": "Tulajdonosi forma",
-    "has_export":"Exportőr",
-    "has_grant":"Kapott támogatást"
-   # "county_name":"Megye"
+    "has_export": "Exportőr",
+    "has_grant": "Kapott támogatást",
+    "ln_sales": "Log értékesítés"
 })
 
+
 def col_to_label(col: str) -> str:
-    """Oszlopnév -> megjelenített label."""
     return VAR_LABELS_BY_COL.get(col, col.replace("_", " "))
+
+
+# ------------------------------------------------------
+# >>> CONFIG LISTS YOU CAN EDIT <<<
+# ------------------------------------------------------
+
+# List of base variables for which you want SQUARED versions.
+TRANSFORM_VARS = [
+    'sales_clean',
+    'tanass_clean',
+    'emp',
+    'age',
+]
+
+# List of base variables for which you want LOG versions.
+LOG_VARS = [
+    'sales_clean',
+    'tanass_clean',
+    'emp',
+    'age',
+]
+
+# List of ALL potential X variables (originals, squared versions, categorical, etc.)
+POTENTIAL_X_VARS = [
+    'emp',
+    'log_emp',
+    'sales_clean',
+    'sales_clean_sq',
+    'tanass_clean',
+    'tanass_clean_sq',
+    'emp',
+    'emp_sq',
+    'age',
+    'age_sq',
+    'firm_owner',
+    'emp_size',
+    'has_export',
+    'has_grant',
+    'log_sales_clean',
+    'log_tanass_clean',
+    'log_age'
+]
+
+# ------------------------------------------------------
+# Main text
+# ------------------------------------------------------
 st.markdown(
     """
     Az adatok forrása **OPTEN**.  
@@ -109,10 +164,12 @@ st.markdown(
     """
 Válasszon **ágazatot**, **kimeneti változót** és **magyarázó változókat**.
 
-Támogatott kimenetek:
+Lehetséges kimenetek:
 
 - **Relatív növekedés**: (Árbevétel_2021 - Árbevétel_2019) / Árbevétel_2019  
 - **Lognövekedés**: ln(Árbevétel_2021) − ln(Árbevétel_2019)
+- **Árbevétel**
+- **ln(Árbevétel)**
 """
 )
 
@@ -146,10 +203,10 @@ if "emp" in d.columns:
         ordered=True
     ).astype("category")
 else:
-    d["emp_size"] = pd.Series(pd.Categorical([np.nan]*len(d)))
+    d["emp_size"] = pd.Series(pd.Categorical([np.nan] * len(d)))
 
 # ------------------------------------------------------
-# Kimenetek
+# Kimenetek (Y) – growth block as before
 # ------------------------------------------------------
 outcome_labels = [
     "Relatív növekedés: (sales_lead - sales)/sales",
@@ -162,102 +219,206 @@ label_to_col = {
 lead_vars_sim = [col for col in ["sales_lead_sim", "ln_sales_lead_sim"] if col in d.columns]
 
 available = [lbl for lbl, col in label_to_col.items() if col in d.columns]
-if not available:
-    if lead_vars_sim:
-        d["sales_growth_perc"] = (d["sales_lead_sim"] - d["sales_clean"]) / d["sales_clean"] * 100
-        d["sales_growth_log_diff"] = d["ln_sales_lead_sim"] - d["ln_sales"]
-        available = [lbl for lbl, col in label_to_col.items() if col in d.columns]
-    else:
-        st.error(
-            "Hiányoznak az előre számolt kimenetek. "
-            "Kérlek futtasd a data generator-t (add_outcomes), hogy létrejöjjenek a kimeneti oszlopok."
-        )
-        st.stop()
 
-if st.session_state["real_data"] == True:
-    d["sales_growth_perc"] = d["sales_growth_perc"] * 100
+
+# ---- EXTRA: add sales and log sales as additional Y options ----
+extra_y_labels = []
+
+if "sales_clean" in d.columns:
+    lab_sales = "Értékesítés (millió Ft)"
+    extra_y_labels.append(lab_sales)
+    label_to_col[lab_sales] = "sales_clean"
+
+if "ln_sales" in d.columns:
+    lab_lnsales = "Log értékesítés"
+    extra_y_labels.append(lab_lnsales)
+    label_to_col[lab_lnsales] = "ln_sales"
+
+available = list(available) + extra_y_labels
+
 outcome_choice = st.sidebar.selectbox("Kimenet", available, index=0)
 y_col = label_to_col[outcome_choice]
+
+# ------------------------------------------------------
+# *** NEW: pénzügyiek ezres megjelenítés (millió Ft -> /1000)
+# Apply to ALL monetary variables in d, including Y if monetary
+# ------------------------------------------------------
+for col in MONETARY_VARS.values():
+    if col in d.columns:
+        d[col] = d[col] / 1000.0
+
+# Now build Y from the (possibly rescaled) d
 y = d[y_col].astype(float)
 
 # ------------------------------------------------------
-# Magyarázó változók
+# Négyzet + log transzformációk
 # ------------------------------------------------------
-exclude_cols = {
-    "nace2_name_code", "nace2", "growth_sim", "ln_sales_lead_sim", "sales_lead_sim",
-    "ln_sales22_lead2", "sales22_lead2", "ln_sales", "name_hu", "row_id", "exit", "county",
-    "sales_growth_log_diff", "sales_growth_perc", "is_ginop", "is_gop", "is_other",
-    "is_tamop", "is_vp","foundyear","jetok","grant_value","ranyag", "county_name", "satok"
-}
-MAX_CAT_LEVELS = 10
+for v in TRANSFORM_VARS:
+    if v not in d.columns:
+        continue
+    s = pd.to_numeric(d[v], errors="coerce")
+    base_label = VAR_LABELS_BY_COL.get(v, v.replace("_", " "))
+    sq_name = f"{v}_sq"
+    if sq_name not in d.columns:
+        d[sq_name] = s ** 2
+        VAR_LABELS_BY_COL[sq_name] = f"{base_label}²"
 
-is_num  = pd.api.types.is_numeric_dtype
+for v in LOG_VARS:
+    if v not in d.columns:
+        continue
+    s = pd.to_numeric(d[v], errors="coerce")
+    base_label = VAR_LABELS_BY_COL.get(v, v.replace("_", " "))
+    log_name = f"log_{v}"
+    if log_name not in d.columns:
+        with np.errstate(divide='ignore', invalid='ignore'):
+            log_s = np.where(s > 0, np.log(s), np.nan)
+        d[log_name] = log_s
+        VAR_LABELS_BY_COL[log_name] = f"log({base_label})"
+
+# ------------------------------------------------------
+# Jelölhető X-változók csak a POTENTIAL_X_VARS listából
+# + tiltsuk le a Y-t és log(Y)-t
+# ------------------------------------------------------
+is_num = pd.api.types.is_numeric_dtype
 is_bool = pd.api.types.is_bool_dtype
 
-candidate_cols = [c for c in d.columns if c not in exclude_cols]
+disallowed_x = {y_col}
+
+log_of_y = f"log_{y_col}"
+if log_of_y in d.columns:
+    disallowed_x.add(log_of_y)
+
+if y_col.startswith("log_"):
+    base_y = y_col[4:]
+    if base_y in d.columns:
+        disallowed_x.add(base_y)
+
+if y_col in ("sales_clean", "ln_sales"):
+    for v in ("sales_clean", "ln_sales", "log_sales_clean"):
+        if v in d.columns:
+            disallowed_x.add(v)
+
+candidate_cols = []
+for c in POTENTIAL_X_VARS:
+    if c in disallowed_x:
+        continue
+    if c in d.columns:
+        candidate_cols.append(c)
+
 categorical_cols, numeric_cols = [], []
 for c in candidate_cols:
     s = d[c]
     nun = s.nunique(dropna=True)
-    if (is_bool(s) or s.dtype == "object" or pd.api.types.is_categorical_dtype(s) or nun <= MAX_CAT_LEVELS):
+    if (is_bool(s) or s.dtype == "object" or pd.api.types.is_categorical_dtype(s) or nun <= 10):
         categorical_cols.append(c)
     elif is_num(s):
         numeric_cols.append(c)
 
-# label -> col MAP-ek a választáshoz
 num_label_to_col = {col_to_label(c): c for c in numeric_cols}
 cat_label_to_col = {col_to_label(c): c for c in categorical_cols}
 
-st.sidebar.subheader("Magyarázó változók")
-
-# A felhasználó label alapján választ folytonos változókat
-cont_labels = st.sidebar.multiselect(
-    "Folytonos magyarázó változók",
-    options=sorted(num_label_to_col.keys())
+# ------------------------------------------------------
+# Modelleket építő UI (Modell 1 & Modell 2)
+# ------------------------------------------------------
+st.sidebar.subheader("Magyarázó változók — Modell 1")
+cont_labels_1 = st.sidebar.multiselect(
+    "Folytonos magyarázó változók – Modell 1",
+    options=sorted(num_label_to_col.keys()),
+    key="cont_m1"
 )
-cont_vars = [num_label_to_col[l] for l in cont_labels]
-
-# Kategorikus változók label alapján
-cat_labels = st.sidebar.multiselect(
-    "Kategorikus magyarázó változók",
-    options=sorted(cat_label_to_col.keys())
+cat_labels_1 = st.sidebar.multiselect(
+    "Kategorikus magyarázó változók – Modell 1",
+    options=sorted(cat_label_to_col.keys()),
+    key="cat_m1"
 )
-cat_vars = [cat_label_to_col[l] for l in cat_labels]
+cont_vars_1 = [num_label_to_col[l] for l in cont_labels_1]
+cat_vars_1 = [cat_label_to_col[l] for l in cat_labels_1]
 
-# --- Per-változó négyzetes tag (label látszik, key a col-név alapján)
-st.sidebar.markdown("**Négyzetes tagok (változónként):**")
-quad_selected = []
-for v in cont_vars:
-    label = col_to_label(v)
-    if st.sidebar.checkbox(f"{label}²", value=False, key=f"quad__{v}"):
-        quad_selected.append(v)
-quad_set = set(quad_selected)
+st.sidebar.subheader("Magyarázó változók — Modell 2")
+cont_labels_2 = st.sidebar.multiselect(
+    "Folytonos magyarázó változók – Modell 2",
+    options=sorted(num_label_to_col.keys()),
+    key="cont_m2"
+)
+cat_labels_2 = st.sidebar.multiselect(
+    "Kategorikus magyarázó változók — Modell 2",
+    options=sorted(cat_label_to_col.keys()),
+    key="cat_m2"
+)
+cont_vars_2 = [num_label_to_col[l] for l in cont_labels_2]
+cat_vars_2 = [cat_label_to_col[l] for l in cat_labels_2]
 
-# --- Per-változó log transzformáció (label látszik, key a col-név)
-st.sidebar.markdown("**Log transzformációk (változónként):**")
-log_selected = []
-for v in cont_vars:
-    label = col_to_label(v)
-    if st.sidebar.checkbox(f"log({label})", value=False, key=f"log__{v}"):
-        log_selected.append(v)
-log_set = set(log_selected)
-
-st.sidebar.markdown("**Interakció:**")
-ownership_default_idx = 0
-ownership_options = [c for c in sorted(set(["firm_owner"]) | set(categorical_cols)) if c in d.columns]
-if "firm_owner" in ownership_options:
-    ownership_default_idx = ownership_options.index("firm_owner")
-
-interact_emp_owner = st.sidebar.checkbox("Méretkategória × tulajdonosi forma interakció", value=False)
-owner_var = "firm_owner"
-
-rhs_cols = cont_vars + cat_vars
-if not rhs_cols:
-    st.info("Válasszon legalább egy magyarázó változót a jobb oldalon a modell futtatásához.")
+rhs_cols_all = cont_vars_1 + cat_vars_1 + cont_vars_2 + cat_vars_2
+if not rhs_cols_all:
+    st.info("Válasszon legalább egy magyarázó változót valamelyik modellhez a jobb oldalon.")
     st.stop()
 
 # ------------------------------------------------------
-# Szélsőérték-kezelés (Y és folytonos X-ek)
+# Lineáris spline beállítások (folytonos X-ek)
+# ------------------------------------------------------
+spline_specs = {}  # v -> list of knots (possibly empty)
+spline_candidates = sorted(set(cont_vars_1) | set(cont_vars_2))
+
+with st.sidebar.expander("Lineáris spline beállítások", expanded=False):
+    if not spline_candidates:
+        st.markdown("*Nincs kiválasztott folytonos magyarázó változó.*")
+    for v in spline_candidates:
+        label = col_to_label(v)
+        use_spline = st.checkbox(f"{label} lineáris spline", value=False, key=f"spline_use__{v}")
+        if not use_spline:
+            continue
+
+        series = pd.to_numeric(d[v], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+        if len(series) < 5:
+            st.warning(f"Nincs elég adat a spline-hoz: {label}")
+            continue
+
+        n_knots = st.selectbox(
+            f"Határpontok száma – {label}",
+            options=[1, 2],
+            index=0,
+            key=f"spline_nk__{v}"
+        )
+
+        knots = []
+        q1 = float(series.quantile(1/3))
+        q2 = float(series.quantile(2/3))
+
+        k1 = st.number_input(
+            f"{label} 1. határ",
+            value=q1,
+            key=f"spline_k1__{v}"
+        )
+        knots.append(k1)
+
+        if n_knots == 2:
+            k2 = st.number_input(
+                f"{label} 2. határ",
+                value=q2,
+                key=f"spline_k2__{v}"
+            )
+            knots.append(k2)
+
+        knots = sorted(knots)
+        spline_specs[v] = knots
+
+        # --- Label-ek a spline szegmensekhez (piecewise) ---
+        base_label = col_to_label(v)
+        n_segments = len(knots) + 1
+        for i in range(n_segments):
+            if i == 0:
+                if len(knots) > 0:
+                    desc = f"≤ {knots[0]:.2f}"
+                else:
+                    desc = ""
+            elif i < len(knots):
+                desc = f"({knots[i-1]:.2f}, {knots[i]:.2f}]"
+            else:
+                desc = f"> {knots[-1]:.2f}"
+            VAR_LABELS_BY_COL[f"{v}_spline_{i+1}"] = f"{base_label} spline szakasz {i+1} ({desc})"
+
+# ------------------------------------------------------
+# Szélsőérték-kezelés (Y + választható folytonos X-ek)
 # ------------------------------------------------------
 FILTER_OPTIONS = [
     "Nincs szűrés",
@@ -266,66 +427,87 @@ FILTER_OPTIONS = [
     "Kézi minimum/maximum"
 ]
 
-st.sidebar.subheader("Szélsőérték-kezelés (kimenet és folytonos magyarázók)")
+with st.sidebar.expander("Szélsőérték-kezelés (Y és X-ek)", expanded=False):
+    # --- Y filter ---
+    y_filter = st.selectbox("**Y szélsőérték-kezelése**", FILTER_OPTIONS, index=0)
 
-y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-
-if y_filter == "Kézi minimum/maximum":
-    st.sidebar.markdown("**Y kézi határok (a kimenet egységében)**")
-    y_clean = y.replace([np.inf, -np.inf], np.nan).dropna()
-    if len(y_clean) > 0:
-        current_min_y = float(np.nanmin(y_clean))
-        current_max_y = float(np.nanmax(y_clean))
+    if y_filter == "Kézi minimum/maximum":
+        st.markdown("**Y kézi határok (a kimenet egységében)**")
+        y_clean = y.replace([np.inf, -np.inf], np.nan).dropna()
+        if len(y_clean) > 0:
+            current_min_y = float(np.nanmin(y_clean))
+            current_max_y = float(np.nanmax(y_clean))
+        else:
+            current_min_y, current_max_y = 0.0, 1.0
+        y_low_manual = st.number_input(
+            "Y minimum",
+            value=current_min_y,
+            step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+        )
+        y_high_manual = st.number_input(
+            "Y maximum",
+            value=current_max_y,
+            step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+        )
+        if y_low_manual > y_high_manual:
+            st.error("Y esetén a minimum nem lehet nagyobb a maximumnál.")
+            y_low_manual, y_high_manual = y_high_manual, y_low_manual
     else:
-        current_min_y, current_max_y = 0.0, 1.0
-    y_low_manual = st.sidebar.number_input(
-        "Y minimum",
-        value=current_min_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    y_high_manual = st.sidebar.number_input(
-        "Y maximum",
-        value=current_max_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    if y_low_manual > y_high_manual:
-        st.sidebar.error("Y esetén a minimum nem lehet nagyobb a maximumnál.")
-        y_low_manual, y_high_manual = y_high_manual, y_low_manual
-else:
-    y_low_manual = None
-    y_high_manual = None
+        y_low_manual = None
+        y_high_manual = None
 
-x_filter = st.sidebar.selectbox("Folytonos X-ek szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+    # --- X filters: user chooses which continuous vars to filter ---
+    st.markdown("**X-ek szűrése:**")
 
-if x_filter == "Kézi minimum/maximum" and cont_vars:
-    st.sidebar.markdown("**X kézi határok (folytonos magyarázók egységében)**")
-    all_x_vals = []
-    for v in cont_vars:
-        all_x_vals.append(pd.to_numeric(d[v], errors="coerce"))
-    all_x_vals = pd.concat(all_x_vals, ignore_index=True).replace([np.inf, -np.inf], np.nan).dropna()
-    if len(all_x_vals) > 0:
-        current_min_x = float(np.nanmin(all_x_vals))
-        current_max_x = float(np.nanmax(all_x_vals))
-    else:
-        current_min_x, current_max_x = 0.0, 1.0
-
-    x_low_manual = st.sidebar.number_input(
-        "X minimum",
-        value=current_min_x,
-        step=(current_max_x - current_min_x)/100 if current_max_x > current_min_x else 1.0
+    x_filterable_labels = sorted(num_label_to_col.keys())
+    x_filter_labels_selected = st.multiselect(
+        "Változók a szűréshez",
+        options=x_filterable_labels,
+        key="x_filter_vars"
     )
-    x_high_manual = st.sidebar.number_input(
-        "X maximum",
-        value=current_max_x,
-        step=(current_max_x - current_min_x)/100 if current_max_x > current_min_x else 1.0
-    )
-    if x_low_manual > x_high_manual:
-        st.sidebar.error("X esetén a minimum nem lehet nagyobb a maximumnál.")
-        x_low_manual, x_high_manual = x_high_manual, x_low_manual
-else:
-    x_low_manual = None
-    x_high_manual = None
 
+    x_filters = {}  # col_name -> (mode, low, high)
+    for lbl in x_filter_labels_selected:
+        col = num_label_to_col[lbl]
+        mode = st.selectbox(
+            f"{lbl} szélsőérték-kezelése",
+            FILTER_OPTIONS,
+            index=0,
+            key=f"x_filter_mode__{col}"
+        )
+
+        low_val = high_val = None
+        if mode == "Kézi minimum/maximum":
+            series = pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+            if len(series) > 0:
+                cur_min = float(np.nanmin(series))
+                cur_max = float(np.nanmax(series))
+            else:
+                cur_min, cur_max = 0.0, 1.0
+            st.markdown(f"**{lbl} kézi határok**")
+            low_val = st.number_input(
+                f"{lbl} minimum",
+                value=cur_min,
+                step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
+                key=f"x_filter_low__{col}"
+            )
+            high_val = st.number_input(
+                f"{lbl} maximum",
+                value=cur_max,
+                step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
+                key=f"x_filter_high__{col}"
+            )
+            if low_val > high_val:
+                st.error(f"{lbl} esetén a minimum nem lehet nagyobb a maximumnál.")
+                low_val, high_val = high_val, low_val
+
+        x_filters[col] = (mode, low_val, high_val)
+
+if "y_filter" not in locals():
+    y_filter = "Nincs szűrés"
+    y_low_manual = y_high_manual = None
+if "x_filters" not in locals():
+    x_filters = {}
 
 def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
     s = series.replace([np.inf, -np.inf], np.nan).dropna()
@@ -340,20 +522,50 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
         q_low, q_high = np.percentile(s, [2, 98])
         return s[(s > q_low) & (s < q_high)]
 
-    if mode == "Kézi minimum/maximum" and low_val is not None and high_val is not None:
+    if mode == "Kézi minimum/maximum":
+        if low_val is None or high_val is None:
+            return s
         return s[(s > low_val) & (s < high_val)]
 
     return s
 
 # ------------------------------------------------------
-# Munkatábla
+# Linear spline helper: piecewise design matrix (lspline)
 # ------------------------------------------------------
-needed_cols = set(rhs_cols) | {"__y__"}
-if interact_emp_owner:
-    if "emp_size" not in d.columns:
-        st.error("Az `emp_size` nem érhető el az interakcióhoz. (Korábban az `emp` alapján kell létrehozni.)")
-        st.stop()
-    needed_cols |= {"emp_size", owner_var}
+def lspline(series: pd.Series, knots: List[float]) -> np.ndarray:
+    """
+    Generate a linear spline design matrix for the input series based on knots.
+    Piecewise form: coefficients correspond to segment-specific slopes.
+
+    Parameters
+    ----------
+    series : pd.Series
+        The input series to generate the design matrix for.
+    knots : List[float]
+        The list of knots to use for the linear spline.
+
+    Returns
+    -------
+    np.ndarray
+        The design matrix for the linear spline with shape (n, len(knots)+1).
+    """
+    vector = series.values.astype(float)
+    columns = []
+
+    for i, knot in enumerate(knots):
+        column = np.minimum(vector, knot if i == 0 else knot - knots[i - 1])
+        columns.append(column)
+        vector = vector - column
+
+    # Add the remainder as the last column
+    columns.append(vector)
+
+    return np.column_stack(columns)
+
+# ------------------------------------------------------
+# Munkatábla + szűrés
+# ------------------------------------------------------
+needed_cols = set(rhs_cols_all) | {"__y__"} | set(x_filters.keys())
 
 dwork = d.copy()
 dwork["__y__"] = y
@@ -363,19 +575,19 @@ if dwork.empty:
     st.error("Nem maradt megfigyelés a kimenet/magyarázók hiányzóinak eldobása után.")
     st.stop()
 
-# Y filter
 y_filtered = apply_filter(dwork["__y__"], y_filter, y_low_manual, y_high_manual)
 if y_filtered.empty:
     st.error("A kimenet (Y) szélsőérték-kezelése után nem maradt megfigyelés.")
     st.stop()
 idx_keep = y_filtered.index
 
-# X filters
-for v in cont_vars:
-    x_series = dwork.loc[idx_keep, v]
-    x_filtered = apply_filter(x_series, x_filter, x_low_manual, x_high_manual)
+for col, (mode, low_val, high_val) in x_filters.items():
+    if col not in dwork.columns:
+        continue
+    x_series = pd.to_numeric(dwork.loc[idx_keep, col], errors="coerce")
+    x_filtered = apply_filter(x_series, mode, low_val, high_val)
     if x_filtered.empty:
-        st.error(f"A(z) `{col_to_label(v)}` változó szélsőérték-kezelése után nem maradt megfigyelés.")
+        st.error(f"A(z) `{col_to_label(col)}` változó szélsőérték-kezelése után nem maradt megfigyelés.")
         st.stop()
     idx_keep = idx_keep.intersection(x_filtered.index)
 
@@ -386,93 +598,78 @@ if dwork.empty:
     st.error("A szélsőérték-kezelés után nem maradt elegendő megfigyelés.")
     st.stop()
 
+Y_full = pd.to_numeric(dwork["__y__"], errors="coerce").replace([np.inf, -np.inf], np.nan)
+
 # ------------------------------------------------------
-# Dizájnmátrix
+# Dizájnmátrix-építő, modellek becslése (spline_specs-szel)
 # ------------------------------------------------------
-X_parts = []
+def build_design_matrix(dwork: pd.DataFrame,
+                        cont_vars,
+                        cat_vars,
+                        spline_specs: dict):
+    X_parts = []
+    dummy_cache = {}
 
-X_parts = []
+    for v in cont_vars:
+        x_raw = pd.to_numeric(dwork[v], errors="coerce").astype(float)
 
-for v in cont_vars:
-    x_raw = pd.to_numeric(dwork[v], errors="coerce").astype(float)
+        knots = spline_specs.get(v, [])
+        if knots:
+            # Proper piecewise linear spline expansion using lspline
+            spline_mat = lspline(x_raw, knots)  # shape: (n, len(knots)+1)
+            col_names = [f"{v}_spline_{i+1}" for i in range(spline_mat.shape[1])]
+            spline_df = pd.DataFrame(spline_mat, index=dwork.index, columns=col_names)
+            X_parts.append(spline_df)
+        else:
+            # No spline: just the raw variable
+            X_parts.append(x_raw.rename(v))
 
-    # If user chose log(v), then use ONLY log(v) (no original).
-    if v in log_set:
-        x_trans = x_raw.where(x_raw > 0, np.nan)
-        x_trans = np.log(x_trans)
-        base_name = f"log({v})"
-    else:
-        x_trans = x_raw
-        base_name = v
-
-    # Add the (possibly transformed) base variable
-    X_parts.append(x_trans.rename(base_name))
-
-    # If user asked for a quadratic term, it’s the square of the variable actually used.
-    # So with log selected, this will be [log(v)]²; without log, it’s v².
-    if v in quad_set:
-        X_parts.append((x_trans**2).rename(f"{base_name}^2"))
-
-dummy_cache = {}
-for v in cat_vars:
-    dummies = pd.get_dummies(
-        dwork[v].astype("category"),
-        prefix=v,
-        drop_first=True,
-        dtype=float
-    )
-    dummy_cache[v] = dummies
-    X_parts.append(dummies)
-
-if interact_emp_owner:
-    if "emp_size" not in dummy_cache:
-        emp_dum = pd.get_dummies(
-            dwork["emp_size"].astype("category"),
-            prefix="emp_size",
+    for v in cat_vars:
+        dummies = pd.get_dummies(
+            dwork[v].astype("category"),
+            prefix=v,
             drop_first=True,
             dtype=float
         )
-    else:
-        emp_dum = dummy_cache["emp_size"]
+        dummy_cache[v] = dummies
+        X_parts.append(dummies)
 
-    own_dum = pd.get_dummies(
-        dwork[owner_var].astype("category"),
-        prefix=owner_var,
-        drop_first=True,
-        dtype=float
-    )
+    if not X_parts:
+        return None
 
-    inter_cols = {}
-    for e_name in emp_dum.columns:
-        for o_name in own_dum.columns:
-            inter = (emp_dum[e_name] * own_dum[o_name]).astype(float)
-            inter_cols[f"{e_name} × {o_name}"] = inter
-    if inter_cols:
-        X_parts.append(pd.DataFrame(inter_cols, index=dwork.index))
+    X = pd.concat(X_parts, axis=1)
+    X = X.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
+    return X
 
-X = pd.concat(X_parts, axis=1)
-X = X.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
-Y = pd.to_numeric(dwork["__y__"], errors="coerce").replace([np.inf, -np.inf], np.nan)
 
-valid = X.notnull().all(axis=1) & Y.notnull()
-X = X.loc[valid]
-Y = Y.loc[valid]
+def fit_model(X: pd.DataFrame, Y: pd.Series):
+    if X is None:
+        return None
+    valid = X.notnull().all(axis=1) & Y.notnull()
+    X_valid = X.loc[valid]
+    Y_valid = Y.loc[valid]
+    if X_valid.shape[0] < 5 or X_valid.shape[1] == 0:
+        return None
+    X_valid = sm.add_constant(X_valid, has_constant="add")
+    model = sm.OLS(Y_valid.astype(float), X_valid.astype(float))
+    res = model.fit(cov_type="HC1")
+    return res
 
-if X.shape[0] < 5 or X.shape[1] == 0:
-    st.error("Nincs elegendő felhasználható adat a kódolás/koerció után. Próbáljon más változókat vagy ágazatot.")
+
+X1 = build_design_matrix(dwork, cont_vars_1, cat_vars_1, spline_specs)
+X2 = build_design_matrix(dwork, cont_vars_2, cat_vars_2, spline_specs)
+
+res1 = fit_model(X1, Y_full)
+res2 = fit_model(X2, Y_full)
+
+if (res1 is None) and (res2 is None):
+    st.error("Egyik modellben sincs elegendő felhasználható adat.")
     st.stop()
 
-X = sm.add_constant(X, has_constant="add")
-model = sm.OLS(Y.astype(float), X.astype(float))
-res = model.fit(cov_type="HC1")
-
 # ------------------------------------------------------
-# Szépített journal-style kimenet, label-ekkel
+# Eredmények táblázata – CPS-stílus, keskeny, középre igazítva
 # ------------------------------------------------------
-# ------------------------------------------------------
-# Szépített journal-style kimenet, label-ekkel
-# ------------------------------------------------------
-st.subheader("Regressziós eredmények")
+st.subheader("Regressziós eredmények (Modell 1 vs. Modell 2)")
 
 def sig_stars(p):
     if p < 0.01:
@@ -499,160 +696,87 @@ def fmt_se(x):
     except Exception:
         return str(x)
 
+all_cat_vars_in_models = set(cat_vars_1) | set(cat_vars_2)
+
 def prettify_name(name: str) -> str:
-    # Konstans
     if name == "const":
         return "Konstans"
-
-    # Interakciók
     if " × " in name:
         left, right = name.split(" × ", 1)
         return f"{prettify_name(left)} × {prettify_name(right)}"
-
-    # Négyzet
-    if name.endswith("^2"):
-        base = name[:-2]
-        base_label = prettify_name(base)
-        return f"{base_label} négyzet"
-
-    # log()
-    if name.startswith("log(") and name.endswith(")"):
-        inner = name[4:-1]
-        inner_label = prettify_name(inner)
-        return f"log({inner_label})"
-
-    # Dummyk: var_level
-    for cat in cat_vars:
+    for cat in all_cat_vars_in_models:
         prefix = f"{cat}_"
         if name.startswith(prefix):
             level = name[len(prefix):]
             var_label = col_to_label(cat)
             return f"{var_label} = {level}"
-
-    # Eredeti változók
     if name in VAR_LABELS_BY_COL:
         return VAR_LABELS_BY_COL[name]
-
     return name.replace("_", " ")
 
-# --- build Stargazer-like rows: coef row, then SE row ---
-rows = []
-for term in res.params.index:
-    coef = res.params[term]
-    se   = res.bse[term]
-    pval = res.pvalues[term]
+def build_summary_table(models, model_labels):
+    summary_tables = []
+    used_labels = []
 
-    coef_str = f"{fmt_coef(coef)}{sig_stars(pval)}"
-    se_str   = f"({fmt_se(se)})"
+    for reg, label in zip(models, model_labels):
+        if reg is None:
+            continue
 
-    # first row: variable name + coefficient
-    rows.append((prettify_name(term), coef_str))
-    # second row: empty variable name + SE
-    rows.append(("", se_str))
+        df = pd.DataFrame({
+            "coef": reg.params,
+            "se": reg.bse,
+            "p": reg.pvalues
+        })
+        df["summary"] = df.apply(
+            lambda row: f"{fmt_coef(row['coef'])}{sig_stars(row['p'])} ({fmt_se(row['se'])})",
+            axis=1
+        )
 
-# optional blank row before summary stats
-rows.append(("", ""))
+        df.index = [prettify_name(idx) for idx in df.index]
 
-# --- summary rows: N and R² ---
-n_obs = int(res.nobs)
-rows.append(("Megfigyelések", f"{n_obs:,}".replace(",", " ")))
-rows.append(("R²", f"{res.rsquared:.3f}"))
+        extra = pd.DataFrame(
+            {"summary": ["-------", f"{int(reg.nobs):,}".replace(",", " "), f"{reg.rsquared:.3f}"]},
+            index=["-------", "Megfigyelések", "R²"]
+        )
+        df = pd.concat([df[["summary"]], extra])
 
-table_df = pd.DataFrame(rows, columns=["Változó", ""])
+        summary_tables.append(df)
+        used_labels.append(label)
 
-css = """
-<style>
-.reg-table-container {
-    display: flex;
-    justify-content: center;
-    margin-top: 0.5rem;
-    margin-bottom: 1.5rem;
-}
+    if not summary_tables:
+        return None
 
-.reg-table {
-    border-collapse: collapse;
-    font-size: 0.9rem;
-    font-family: "Times New Roman", serif;
-    max-width: 650px;
-    border: none;
-}
+    combined = pd.concat(summary_tables, axis=1)
+    combined.columns = used_labels
 
-/* remove all borders by default */
-.reg-table th,
-.reg-table td {
-    border: none;
-}
+    rows = list(combined.index)
+    ordered = []
+    if "Konstans" in rows:
+        ordered.append("Konstans")
+    for r in sorted(r for r in rows if r not in ["Konstans", "Megfigyelések", "R²", "-------"]):
+        ordered.append(r)
+    if "-------" in rows:
+        ordered.append("-------")
+    if "Megfigyelések" in rows:
+        ordered.append("Megfigyelések")
+    if "R²" in rows:
+        ordered.append("R²")
 
-/* header: single line underneath */
-.reg-table thead tr th {
-    padding: 4px 10px;
-    border-bottom: 1px solid #000;
-}
+    return combined.reindex(ordered)
 
-/* body cells: NO borders between variables */
-.reg-table tbody tr td {
-    padding: 2px 10px;
-}
+summary_table = build_summary_table([res1, res2], ["Modell 1", "Modell 2"])
 
-/* line ABOVE summary stats (N row = 2nd from last) */
-.reg-table tbody tr:nth-last-child(2) td {
-    border-top: 1px solid #000;
-}
-
-/* line BELOW last row (R²) */
-.reg-table tbody tr:last-child td {
-    border-bottom: 1px solid #000;
-}
-
-/* alignment */
-.reg-table th:first-child,
-.reg-table td:first-child {
-    text-align: left;
-}
-.reg-table th:not(:first-child),
-.reg-table td:not(:first-child) {
-    text-align: right;
-}
-</style>
-"""
-
-
-
-html_table = table_df.to_html(
-    index=False,
-    classes="reg-table",
-    border=0,
-    escape=False
-)
-
-st.markdown(css + f'<div class="reg-table-container">{html_table}</div>', unsafe_allow_html=True)
-
+if summary_table is not None:
+    left_spacer, mid_col, right_spacer = st.columns([1, 3, 1])
+    with mid_col:
+        st.table(summary_table, border=False)
+else:
+    st.error("Nem sikerült regressziós összefoglalót készíteni.")
 
 note = "Zárójelben a robusztus (HC1) standard hibák szerepelnek."
-
-def _baseline_of(series: pd.Series) -> str:
-    s = series.astype("category")
-    cats = list(s.cat.categories)
-    return "—" if len(cats) == 0 else str(cats[0])
-
-cats_in_model = set(cat_vars)
-if 'interact_emp_owner' in locals() and interact_emp_owner:
-    cats_in_model |= {"emp_size", owner_var}
-
-baseline_lines = []
-for v in sorted(cats_in_model):
-    if v in dwork.columns:
-        baseline_lines.append(f"{v}: {_baseline_of(dwork[v])}")
-
-baselines_text = " | ".join(baseline_lines) if baseline_lines else "Nincs"
 
 st.markdown(
     f"<span style='font-size:0.85rem'><em>Megjegyzés:</em> {note} "
     "Szignifikanciaszintek: *** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1.</span>",
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    f"<span style='font-size:0.85rem'><em>Kategóriák referencia-szintjei (együttható nélkül):</em> {baselines_text}</span>",
     unsafe_allow_html=True,
 )

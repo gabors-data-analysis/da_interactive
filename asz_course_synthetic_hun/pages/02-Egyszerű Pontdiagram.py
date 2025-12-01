@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from matplotlib.ticker import FuncFormatter, LogLocator
+from typing import List  # for lspline type hints
+import statsmodels.api as sm  # for spline regression
 
 # Optional for LOWESS
 try:
@@ -41,16 +43,23 @@ def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFram
     if missing:
         df["sales_growth_perc"] = (df["sales_lead_sim"] - df["sales_clean"]) / df["sales_clean"] * 100
         df["sales_growth_log_diff"] = df["ln_sales_lead_sim"] - df["ln_sales"]
-    
     else:
         df["sales_growth_perc"] = df["sales_growth_perc"] * 100
-    
 
     return df
 
 
 cs = load_cross_section(st.session_state['data_path'])
 
+
+# ---- NEW: create ln_sales and ln_emp as extra variables ----
+if "sales_clean" in cs.columns and "ln_sales" not in cs.columns:
+    cs["ln_sales"] = np.log(np.clip(cs["sales_clean"].astype(float), 1e-9, None))
+
+if "emp" in cs.columns and "ln_emp" not in cs.columns:
+    emp_vals = pd.to_numeric(cs["emp"], errors="coerce")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cs["ln_emp"] = np.where(emp_vals > 0, np.log(emp_vals), np.nan)
 
 # ----------------------- UI: fejlécek ------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -120,12 +129,16 @@ else:
     }
 
 NON_MONETARY_VARS = {
-    "Relatív növekedés (%)":"sales_growth_perc",
-    "Log növekedés (log-diff)":"sales_growth_log_diff",
+    "Relatív növekedés (%)": "sales_growth_perc",
+    "Log növekedés (log-diff)": "sales_growth_log_diff",
     'Foglalkoztatottak száma (fő)': 'emp',
     'Kor (év)': 'age',
+    # --- NEW: log variables for plotting ---
+    'Log értékesítés': 'ln_sales',
+    'Log foglalkoztatottak száma': 'ln_emp',
 }
-var_map = { **NON_MONETARY_VARS,**MONETARY_VARS}
+
+var_map = {**NON_MONETARY_VARS, **MONETARY_VARS}
 
 available = {k: v for k, v in var_map.items() if v in cs.columns}
 x_label = st.sidebar.selectbox("X változó", list(available.keys()), index=2)
@@ -220,18 +233,51 @@ bin_scatter_map = {
 n_bins = bin_scatter_map.get(bin_scatter_choice, None)
 use_bin_scatter = n_bins is not None
 
-# --- NEW: plot size controls (inches) ---
-
 # ----------------------- Illesztés ---------------------------
 fit_type = st.sidebar.selectbox(
     "Illesztés rárajzolása (eredeti adaton, nem a bin-eken)",
-    ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "Lépcsős (5 bin)", "Lépcsős (20 bin)"],
+    [
+        "Nincs",
+        "Lineáris",
+        "Kvadratikus",
+        "Köbös",
+        "Lépcsős (5 bin)",
+        "Lépcsős (20 bin)",
+        "LOWESS",
+        "Lineáris spline"
+    ],
     index=0
 )
 if fit_type == "LOWESS" and not HAS_LOWESS:
     st.sidebar.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
 
+# --- Lineáris spline beállítások (X-re) ---
+spline_use = False
+spline_knots = []
 
+if fit_type == "Lineáris spline":
+    st.sidebar.subheader("Lineáris spline (X változó)")
+    series_for_knots = df[xvar].replace([np.inf, -np.inf], np.nan).dropna()
+    if len(series_for_knots) < 5:
+        st.sidebar.warning("Nincs elég adat a spline-hoz.")
+    else:
+        spline_use = True
+        if spline_use:
+            n_knots = st.sidebar.selectbox("Határontok száma", [1, 2], index=0)
+            q1 = float(series_for_knots.quantile(1/3))
+            q2 = float(series_for_knots.quantile(2/3))
+            k1 = st.sidebar.number_input(
+                f"Első határ (X egységében)",
+                value=q1
+            )
+            spline_knots = [k1]
+            if n_knots == 2:
+                k2 = st.sidebar.number_input(
+                    f"Második határ (X egységében)",
+                    value=q2
+                )
+                spline_knots.append(k2)
+            spline_knots = sorted(spline_knots)
 
 # Log skálák
 logx = st.sidebar.checkbox("Logaritmikus skála X", value=False)
@@ -283,6 +329,37 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
         return s[(s > low_val) & (s < high_val)]
 
     return s
+
+
+# ----------------------- Linear spline helper -----------------------
+def lspline(series: pd.Series, knots: List[float]) -> np.ndarray:
+    """
+    Lineáris spline dizájnmátrix (piecewise) a megadott kötésekkel.
+
+    Parameters
+    ----------
+    series : pd.Series
+        A bemeneti sorozat (itt az X transzformált tere).
+    knots : List[float]
+        A kötési pontok listája (ugyanabban az egységben, mint a series).
+
+    Returns
+    -------
+    np.ndarray
+        Dizájnmátrix (n x (len(knots)+1)).
+    """
+    vector = series.values.astype(float)
+    columns = []
+
+    for i, knot in enumerate(knots):
+        column = np.minimum(vector, knot if i == 0 else knot - knots[i - 1])
+        columns.append(column)
+        vector = vector - column
+
+    # Maradék, utolsó szakasz
+    columns.append(vector)
+
+    return np.column_stack(columns)
 
 
 x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
@@ -352,16 +429,9 @@ if fit_type in {"Lineáris", "Kvadratikus", "Köbös"} and len(plot_df) >= 10:
 
     if deg == 1:
         a, b = coef[1], coef[0]
-        trafo_note = []
-        if logy:
-            trafo_note.append("ln(y)")
-        else:
-            trafo_note.append("y")
-        if logx:
-            xname = "ln(x)"
-        else:
-            xname = "x"
-        coef_text = f"{fit_type}: {trafo_note[0]} = {a:.4g} + {b:.4g}·{xname}"
+        yname = "ln(y)" if logy else "y"
+        xname = "ln(x)" if logx else "x"
+        coef_text = f"{fit_type}: {yname} = {a:.4g} + {b:.4g}·{xname}"
     elif deg == 2:
         a, b, c = coef[2], coef[1], coef[0]
         xname = "ln(x)" if logx else "x"
@@ -383,6 +453,37 @@ elif fit_type == "LOWESS" and HAS_LOWESS and len(plot_df) >= 10:
     x_orig = inv_x(z[:, 0])
     y_orig = inv_y(z[:, 1])
     ax.plot(x_orig, y_orig, color=color[1], linewidth=2, alpha=0.9, label="LOWESS illesztés")
+
+elif fit_type == "Lineáris spline" and spline_use and len(plot_df) >= 10 and len(spline_knots) > 0:
+    # Spline illesztés a transzformált X-re
+    xx_tr = fwd_x(plot_df[xvar].astype(float))
+    yy_tr = fwd_y(plot_df[yvar].astype(float))
+
+    # Kötések a transzformált térben is
+    knots_tr = fwd_x(np.array(spline_knots, dtype=float))
+    X_spline = lspline(pd.Series(xx_tr, index=plot_df.index), knots_tr)
+    X_design = sm.add_constant(X_spline)
+    model = sm.OLS(yy_tr.values.astype(float), X_design.astype(float))
+    res = model.fit(cov_type="HC1")
+
+    # Előrejelzés a teljes X-tartományon
+    xs_orig = np.linspace(plot_df[xvar].min(), plot_df[xvar].max(), 400)
+    xs_tr = fwd_x(xs_orig)
+    X_pred = lspline(pd.Series(xs_tr), knots_tr)
+    X_pred_design = sm.add_constant(X_pred)
+    yhat_tr = res.predict(X_pred_design)
+    yhat_orig = inv_y(yhat_tr)
+
+    ax.plot(xs_orig, yhat_orig, color=color[1], linewidth=2, alpha=0.9, label="Lineáris spline illesztés")
+
+    # Koeficiens-egyenlet (szegmens-bázis formában)
+    coefs = res.params
+    intercept = coefs[0]
+    betas = coefs[1:]
+    yname = "ln(y)" if logy else "y"
+    xname = "ln(x)" if logx else "x"
+    terms = " + ".join([f"{b:.4g}·s{i+1}({xname})" for i, b in enumerate(betas)])
+    coef_text = f"Lineáris spline: {yname} = {intercept:.4g}" + (f" + {terms}" if terms else "")
 
 elif fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     steps = 5 if "5" in fit_type else 20
@@ -487,7 +588,7 @@ if fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
     # Bin edges by quantiles (this keeps duplicates!)
     edges = np.quantile(x_vals, q_grid)
 
-    # --- NEW: compute mean Y in each bin, using these edges ---
+    # --- compute mean Y in each bin, using these edges ---
     y_means = []
     for i, (low, high) in enumerate(zip(edges[:-1], edges[1:])):
         # Handle NaNs in edges gracefully
@@ -508,7 +609,7 @@ if fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
         "Rekesz": np.arange(1, steps + 1),
         "Alsó Határ": edges[:-1],
         "Felső Határ": edges[1:],
-        f"{y_label} átlag": y_means,   # <- NEW COLUMN
+        f"{y_label} átlag": y_means,
     })
 
     st.markdown("**Lépcsős illesztés – Rekeszhatárok és bin-átlagok (Y):**")
@@ -548,7 +649,6 @@ bin_note = bin_scatter_choice
 
 st.markdown(
     f"**Minta:** {scope_label} · **X:** `{x_label}` · **Y:** `{y_label}`"
-    # + f" · **Szélső értékek (X/Y):** {tail_note_x} / {tail_note_y} · **Bin scatter:** {bin_note}"
 )
 
 if coef_text is not None:
