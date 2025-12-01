@@ -1,25 +1,25 @@
 body {
-	background-color: #C2DEDE;
+	background-color: #f7f9fc;
 	font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", "Helvetica Neue", "Lucida Grande", Arial, sans-serif;
-	color: #233854;
+	color: #344174 !important;
 }
 
 a {
-	color: #541352;
+	color: #3fb369;
 }
 
 .navbar {
-	background-color: #C2DEDE;
+	background-color: #f7f9fc;
 	border-color: #EBEFF4;
 }
 
 .list-group .list-group-item {
-	background-color: #C2DEDE;
-	color: #233854;
+	background-color: #d8f1f1;
+	color: #344174;
 }
 
 .list-group-item {
-	background-color: #C2DEDE;
+	background-color: #d8f1f1;
 	border-color: #EBEFF4;
 }
 
@@ -29,6 +29,12 @@ a {
 
 .app-list-title {
 	font-weight: bold;
+	color: #344174 !important;
+}
+
+.list-group {
+	grid-row-gap: 10px !important;
+	grid-column-gap: 10px !important;
 }
 
 .list-group-item:hover {

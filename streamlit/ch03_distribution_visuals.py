@@ -6,7 +6,7 @@ import seaborn as sns
 
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
-st.set_page_config(page_title='Ch. 3 - Visualizing Distributions', layout='wide')
+st.set_page_config(page_title='Visualizing Distributions', layout='wide')
 
 # load hotels-europe dataset from OSF and cache it
 @st.cache_data
@@ -26,7 +26,7 @@ def apply_filters(hotels_price, hotels_features, city, minprice, maxprice):
 
 hotels_price, hotels_features = load_data()
 
-st.title('Chapter 3: Visualizing Distributions')
+st.title('Chart Your Data - Visualizing Distributions')
 st.markdown("""
 Visualizing distributions is a crucial step in every analytical project.
 This dashboard focuses on various methods to visualize the distribution of hotel prices, including histograms, boxplots, density plots, and violin plots.
@@ -92,6 +92,7 @@ else:
             sns.histplot(workset['price'], binwidth=bin_width, kde=False, ax=ax, color=color[0], edgecolor='white', fill=True, alpha=1)
         ax.set_xlabel('Price (USD)')
         ax.set_ylabel('Frequency')
+        ax.set_xlim(workset['price'].min(), workset['price'].max())
         ax.spines[['top', 'right']].set_visible(False)
         plt.tight_layout()
         st.pyplot(fig)
@@ -102,6 +103,7 @@ else:
         sns.boxplot(x=workset['price'], ax=ax, color=color[0], fill=True, linecolor='black')
         ax.set_xlabel('Price (USD)')
         ax.spines[['top', 'right']].set_visible(False)
+        ax.set_xlim(workset['price'].min(), workset['price'].max())
         plt.tight_layout()
         st.pyplot(fig)
     
@@ -113,6 +115,7 @@ else:
         ax.set_xlabel('Price (USD)')
         ax.set_ylabel('Density')
         ax.spines[['top', 'right']].set_visible(False)
+        ax.set_xlim(workset['price'].min(), workset['price'].max())
         plt.tight_layout()
         st.pyplot(fig)
         # Violin Plot (KDE overlay with bandwidth set by the user)
@@ -121,5 +124,6 @@ else:
         sns.violinplot(x=workset['price'], ax=ax, bw_method=bandwidth, color=color[0], fill=True, linecolor='black')
         ax.set_xlabel('Price (USD)')
         ax.spines[['top', 'right']].set_visible(False)
+        ax.set_xlim(workset['price'].min(), workset['price'].max())
         plt.tight_layout()
         st.pyplot(fig)

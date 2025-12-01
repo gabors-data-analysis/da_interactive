@@ -9,7 +9,7 @@ import statsmodels.api as sm
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
 st.set_page_config(page_title='Measurement Error', layout="wide")
-st.title('Measurement Error')
+st.title('The Hidden Impact of Measurement Error on Regression Analysis')
 
 st.markdown(
 """
@@ -199,6 +199,7 @@ axs[0].set_xlabel("Distance (miles)")
 axs[0].set_ylabel("Frequency")
 axs[0].spines[['top', 'right']].set_visible(False)
 axs[0].legend()
+axs[0].set_xlim(min(x_plot.min(), x_err_plot.min()), max(x_plot.max(), x_err_plot.max()))
 
 # Price histogram overlay
 sns.histplot(y_plot, ax=axs[1], color=color[0], alpha=0.5, label="Without Error", binwidth=25 if not log_y else 0.25)
@@ -210,6 +211,7 @@ axs[1].set_xlabel("Price (USD)")
 axs[1].set_ylabel("Frequency")
 axs[1].spines[['top', 'right']].set_visible(False)
 axs[1].legend()
+axs[1].set_xlim(min(y_plot.min(), y_err_plot.min()), max(y_plot.max(), y_err_plot.max()))
 
 # Show the plots
 st.subheader("Distribution of Variables with and without Measurement Error")
@@ -245,7 +247,9 @@ ax.spines[['top', 'right']].set_visible(False)
 ax.legend()
 
 st.subheader("Regression with and without Measurement Error")
-st.pyplot(fig, use_container_width=False)
+col1, col2 = st.columns([0.67, 0.33])
+with col1:
+    st.pyplot(fig, use_container_width=False)
 
 # Construct table with regression results
 def stargazer_table(model, label_x):

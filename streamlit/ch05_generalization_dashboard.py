@@ -18,8 +18,8 @@ def create_sample_frame(
 
     return sample_frame
 
-st.set_page_config(page_title='Generalzing from Data', layout="wide")
-st.title('Generalizing from Data')
+st.set_page_config(page_title='Generalizing from Data', layout="wide")
+st.title('Generalizing from Sample to Population - Standard Errors')
 # Dashboard description
 st.markdown('''
 This dashboard illustrates the key concepts discussed in Chapter 5 about generalizing from data.
@@ -127,6 +127,7 @@ with col1:
     ax.set_ylabel('Frequency')
     ax.spines[['top', 'right']].set_visible(False)
     ax.legend().set_visible(False)
+    ax.set_xlim(population_df['value'].min(), population_df['value'].max())
     plt.tight_layout()
     st.pyplot(fig)
 with col2:
@@ -140,6 +141,7 @@ with col2:
     ax.set_ylabel('Frequency')
     ax.spines[['top', 'right']].set_visible(False)
     ax.legend().set_visible(False)
+    ax.set_xlim(sample_df['value'].min(), sample_df['value'].max())
     plt.tight_layout()
     st.pyplot(fig)
 
@@ -159,6 +161,7 @@ with col1:
     ax.set_ylabel('Frequency')
     ax.spines[['top', 'right']].set_visible(False)
     ax.legend().set_visible(False)
+    ax.set_xlim(rep_sample_means.min(), rep_sample_means.max())
     plt.tight_layout()
     st.pyplot(fig)
 with col2:
@@ -175,6 +178,7 @@ with col2:
     ax.set_ylabel('Frequency')
     ax.spines[['top', 'right']].set_visible(False)
     ax.legend().set_visible(False)
+    ax.set_xlim(bootstrap_sample_means.min(), bootstrap_sample_means.max())
     plt.tight_layout()
     st.pyplot(fig)
 
