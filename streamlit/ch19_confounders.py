@@ -183,7 +183,7 @@ with col1:
 
 with col2:
     st.markdown("### Model B")
-    z_vars_b = st.multiselect("Add control variables (Model B)", ["sleep", "age", "heart_rate"], key="b")
+    z_vars_b = st.multiselect("Add control variables (Model B)", ["sleep", "age", "heart_rate"], default=["sleep", "age"], key="b")
 
 # Run regression
 def run_model(z_vars):
@@ -256,7 +256,7 @@ coef_df = pd.DataFrame({
     "Upper": [upper_b, upper_a]
 })
 
-fig, ax = plt.subplots(figsize=(5, 2))
+fig, ax = plt.subplots(figsize=(10, 2))
 
 # Horizontal bars
 ax.barh(
@@ -272,11 +272,22 @@ ax.barh(
 ax.axvline(coef_true, color=color[1], linestyle="--", label="True Coefficient")
 
 ax.set_xlabel("Coefficient Estimate")
-ax.set_title("Caffeine Effect Estimates (95% CI)")
 ax.spines[['top', 'right']].set_visible(False)
 ax.legend()
 
-st.pyplot(fig)
+# lower legend size
+ax.legend(fontsize=8)
+
+# move legend to the top middle
+ax.legend(loc='upper left', bbox_to_anchor=(0, 1.2), ncol=2)
+#plt.tight_layout()
+
+
+c1, c2 = st.columns([1.5, 3.5])
+with c1:
+    st.markdown("### Caffeine Effect Estimates (95% CI)")
+with c2:
+    st.pyplot(fig)
 
 
 # Preview data
