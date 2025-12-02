@@ -102,6 +102,7 @@ np.random.seed(seed)
 
 def measurement_error_input(label, mean_min, mean_max, mean_def, sd_min, sd_max, sd_def):
     error_type = st.sidebar.selectbox(f"{label} Error Type", ["None", "Classical", "Non-Classical (Bias)", "Non-Classical (Correlated)"],
+                                      index=1 if label == "X (Distance)" else 0,
                                       help='''
 * Classical: Adds normally distributed error with mean 0 and specified SD.
 * Non-Classical (Bias): Adds normally distributed error with specified mean and SD.
@@ -122,7 +123,7 @@ def measurement_error_input(label, mean_min, mean_max, mean_def, sd_min, sd_max,
     else:
         return lambda df: np.zeros(len(df))
 
-x_error_fn = measurement_error_input("X (Distance)", -5.0, 5.0, 0.0, 0.1, 3.0, 0.1)
+x_error_fn = measurement_error_input("X (Distance)", -5.0, 5.0, 0.0, 0.1, 3.0, 1.0)
 y_error_fn = measurement_error_input("Y (Price)", -50.0, 50.0, 0.0, 0.1, 100.0, 10.0)
 
 # Log transformation and model degree
