@@ -49,7 +49,7 @@
         <!-- This is a fragment used to display a single app. -->
         <!-- Modify this in order to change how a single app looks. -->
         <th:block th:fragment="app(app)">
-            <th:block th:if="${app != null}">
+            <th:block th:if="${app != null and app.id != 'optenfirms0'}">
                 <div
                         class="list-group-item"
                         th:classappend="${@thymeleaf.openSwitchInstanceInsteadOfApp(app) ? 'app-link-switch' : 'app-link-open'}"
