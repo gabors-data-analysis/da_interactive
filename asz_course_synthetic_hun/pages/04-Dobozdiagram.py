@@ -68,8 +68,6 @@ CATEGORY_VARS = {
 # Szélsőérték-kezelési opciók (mint a szórásdiagramnál)
 FILTER_OPTIONS = [
     "Nincs szűrés",
-    "Winsor top–bottom 2%",
-    "Levágás top–bottom 2%",
     "Kézi minimum/maximum"
 ]
 
@@ -130,19 +128,29 @@ st.markdown(
     "a piros pont jelzi az **átlagot**. Opcionálisan **ln(Y)** skálán is ábrázolhat."
 )
 
-# --------------------------- Oldalsáv ---------------------------
-st.sidebar.header("Beállítások")
+col_settings, col_sep, col_viz = st.columns([4, 2, 12])
 
-# Ágazati szűrő
-lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
-lab_df["__code"] = pd.to_numeric(
-    lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
-    errors="coerce"
-)
-lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
-opts = ["Összes ágazat"] + lab_df["label"].tolist()
+with col_sep:
+    st.markdown(
+        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
+        unsafe_allow_html=True,
+    )
 
-sel_label = st.sidebar.selectbox("Ágazat", opts, index=0)
+# --------------------------- Beállítások (Bal oldal) ---------------------------
+with col_settings:
+    st.header("Beállítások")
+
+    # Ágazati szűrő
+    lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
+    lab_df["__code"] = pd.to_numeric(
+        lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
+        errors="coerce"
+    )
+    lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
+    opts = ["Összes ágazat"] + lab_df["label"].tolist()
+
+    sel_label = st.selectbox("Ágazat", opts, index=0)
+
 scope_all = sel_label == "Összes ágazat"
 df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
 
@@ -186,51 +194,54 @@ if not x_candidates or not y_candidates:
 x_labels = [COL2NAME.get(c, c) for c in x_candidates]
 y_labels = [COL2NAME.get(c, c) for c in y_candidates]
 
-x_label = st.sidebar.selectbox("X (kategóriás/dummy)", x_labels, index=0)
-y_label = st.sidebar.selectbox("Y (folytonos)", y_labels, index=0)
+with col_settings:
+    x_label = st.selectbox("X (kategóriás/dummy)", x_labels, index=0)
+    y_label = st.selectbox("Y (folytonos)", y_labels, index=0)
 
 xvar = NAME2COL.get(x_label, x_label)
 yvar = NAME2COL.get(y_label, y_label)
 
 # --------------------------- Y szélsőérték-kezelés (ÚJ) ---------------------------
 y_is_monetary = yvar in MONETARY_VARS.values()
-st.sidebar.subheader("Szélsőérték-kezelés (Y)")
-y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
-# Adattisztítás a határokhoz
-df = df.replace([np.inf, -np.inf], np.nan)
-df = df.dropna(subset=[xvar, yvar])
+with col_settings:
+    with st.expander("Szélsőérték-kezelés (Y)"):
+        y_filter = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
-# Pénzügyi skála (millió Ft -> /1000, ha kell)
-if y_is_monetary:
-    df[yvar] = df[yvar] / 1000.0
+        # Adattisztítás a határokhoz
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(subset=[xvar, yvar])
 
-# Manuális határok Y-hoz (az aktuális, skálázott Y-on)
-if y_filter == "Kézi minimum/maximum":
-    st.sidebar.markdown("**Y kézi határok (a megjelenített egységben)**")
-    current_min_y = float(np.nanmin(df[yvar]))
-    current_max_y = float(np.nanmax(df[yvar]))
-    y_low_manual = st.sidebar.number_input(
-        "Y minimum",
-        value=current_min_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    y_high_manual = st.sidebar.number_input(
-        "Y maximum",
-        value=current_max_y,
-        step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-    )
-    if y_low_manual > y_high_manual:
-        st.sidebar.error("A minimum nem lehet nagyobb a maximum­nál.")
-        # csak vizuális hibaüzenet; a filter függvény majd kezeli
-else:
-    y_low_manual = None
-    y_high_manual = None
+        # Pénzügyi skála (millió Ft -> /1000, ha kell)
+        if y_is_monetary:
+            df[yvar] = df[yvar] / 1000.0
 
-# ln(Y) + további opciók
-use_log_y = st.sidebar.checkbox("Y log skála (ln)", value=False)
-hide_outliers = st.sidebar.checkbox("Kiugrók elrejtése a dobozábrán", value=False)
-overlay_points = st.sidebar.checkbox("Egyedi pontok megjelenítése", value=False)
+        # Manuális határok Y-hoz (az aktuális, skálázott Y-on)
+        if y_filter == "Kézi minimum/maximum":
+            st.markdown("**Y kézi határok (a megjelenített egységben)**")
+            current_min_y = float(np.nanmin(df[yvar]))
+            current_max_y = float(np.nanmax(df[yvar]))
+            y_low_manual = st.number_input(
+                "Y minimum",
+                value=current_min_y,
+                step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+            )
+            y_high_manual = st.number_input(
+                "Y maximum",
+                value=current_max_y,
+                step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
+            )
+            if y_low_manual > y_high_manual:
+                st.error("A minimum nem lehet nagyobb a maximum­nál.")
+        else:
+            y_low_manual = None
+            y_high_manual = None
+
+    # ln(Y) + további opciók
+    with st.expander("Megjelenítés és Skála"):
+        use_log_y = st.checkbox("Y log skála (ln)", value=False)
+        hide_outliers = st.checkbox("Kiugrók elrejtése a dobozábrán", value=False)
+        overlay_points = st.checkbox("Egyedi pontok megjelenítése", value=False)
 
 
 
@@ -241,22 +252,11 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
     """
     mode: one of FILTER_OPTIONS
     - Nincs szűrés: return as-is
-    - Winsor top–bottom 2%: clip at 2/98
-    - Levágás top–bottom 2%: drop outside 2/98
     - Kézi minimum/maximum: drop outside low_val/high_val
     """
     s = series.dropna()
     if len(s) < 5 or mode == "Nincs szűrés":
         return s
-
-    if mode == "Winsor top–bottom 2%":
-        q_low, q_high = np.percentile(s, [2, 98])
-        return s.clip(q_low, q_high)
-
-    if mode == "Levágás top–bottom 2%":
-        q_low, q_high = np.percentile(s, [2, 98])
-        # st.write(q_low,q_high)
-        return s[(s > q_low) & (s < q_high)]
 
     if mode == "Kézi minimum/maximum" and low_val is not None and high_val is not None:
         return s[(s > low_val) & (s < high_val)]
@@ -309,67 +309,68 @@ df["__x_display__"] = df[xvar].apply(lambda v: pretty_cat_value(xvar, v))
 order = df["__x_display__"].value_counts(dropna=False).index.tolist()
 
 # --------------------------- Ábra ---------------------------
-fig, ax = plt.subplots(figsize=(9, 5))
+with col_viz:
+    fig, ax = plt.subplots(figsize=(9, 5))
 
-sns.boxplot(
-    data=df,
-    x="__x_display__", y="__y__",
-    order=order,
-    showfliers=not hide_outliers,
-    width=0.6, color=color[0],
-    ax=ax
-)
-
-# Piros pont az átlagokra (kategóriánként)
-mean_by_cat = df.groupby("__x_display__")["__y__"].mean().reindex(order)
-x_positions = np.arange(len(order))
-ax.scatter(
-    x_positions,
-    mean_by_cat.values,
-    color="red",
-    s=40,
-    zorder=4,
-    label="Átlag"
-)
-
-# Egyedi pontok
-if overlay_points:
-    sns.stripplot(
+    sns.boxplot(
         data=df,
         x="__x_display__", y="__y__",
         order=order,
-        dodge=False, jitter=0.15,
-        alpha=0.35, color="black",
-        size=3, ax=ax
+        showfliers=not hide_outliers,
+        width=0.6, color=color[0],
+        ax=ax
     )
 
-# Tengelyek, feliratok
-ax.set_xlabel(x_label)
-ax.set_ylabel(y_axis_label)
-ax.spines[['top', 'right']].set_visible(False)
-ax.tick_params(axis='x', rotation=20)
+    # Piros pont az átlagokra (kategóriánként)
+    mean_by_cat = df.groupby("__x_display__")["__y__"].mean().reindex(order)
+    x_positions = np.arange(len(order))
+    ax.scatter(
+        x_positions,
+        mean_by_cat.values,
+        color="red",
+        s=40,
+        zorder=4,
+        label="Átlag"
+    )
 
-# Y formázás, ha pénzügyi és nem log
-if fmt_monetary:
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}"))
+    # Egyedi pontok
+    if overlay_points:
+        sns.stripplot(
+            data=df,
+            x="__x_display__", y="__y__",
+            order=order,
+            dodge=False, jitter=0.15,
+            alpha=0.35, color="black",
+            size=3, ax=ax
+        )
 
-# Legenda (csak átlag pontokra)
-ax.legend(frameon=False, loc="best")
+    # Tengelyek, feliratok
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_axis_label)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.tick_params(axis='x', rotation=20)
 
-plt.tight_layout()
-st.pyplot(fig)
+    # Y formázás, ha pénzügyi és nem log
+    if fmt_monetary:
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.2f}"))
 
-# --------------------------- Összegzés táblázat ---------------------------
-desc = df.groupby("__x_display__", observed=True)["__y__"].agg(
-    n="count", átlag="mean", median="median"
-).loc[order]
-desc = desc.rename_axis(x_label).reset_index()
+    # Legenda (csak átlag pontokra)
+    ax.legend(frameon=False, loc="best")
 
-if use_log_y:
-    st.caption("Megjegyzés: Y tengely természetes log skálán (ln). "
-               "Az összefoglaló is ezen a skálán értendő.")
-if y_filter != "Nincs szűrés":
-    st.caption(f"Y szélsőérték-kezelés: **{y_filter}**.")
+    plt.tight_layout()
+    st.pyplot(fig)
 
-st.subheader("Kategóriánkénti összefoglaló (ábrán használt skálán)")
-st.dataframe(desc, use_container_width=True)
+    # --------------------------- Összegzés táblázat ---------------------------
+    desc = df.groupby("__x_display__", observed=True)["__y__"].agg(
+        n="count", átlag="mean", median="median"
+    ).loc[order]
+    desc = desc.rename_axis(x_label).reset_index()
+
+    if use_log_y:
+        st.caption("Megjegyzés: Y tengely természetes log skálán (ln). "
+                   "Az összefoglaló is ezen a skálán értendő.")
+    if y_filter != "Nincs szűrés":
+        st.caption(f"Y szélsőérték-kezelés: **{y_filter}**.")
+
+    st.subheader("Kategóriánkénti összefoglaló (ábrán használt skálán)")
+    st.dataframe(desc, use_container_width=True)

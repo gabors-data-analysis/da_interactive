@@ -66,56 +66,66 @@ st.markdown(
 st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
 
-# ----------------------- Oldalsáv ---------------------------
-st.sidebar.header("Beállítások")
+col_settings, col_sep, col_viz = st.columns([4, 2, 12])
 
-# Ágazati opciók: ÖSSZES elöl, majd kódszám szerint
-lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
-lab_df["__code"] = pd.to_numeric(lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
-                                 errors="coerce")
-lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
-options = ["Összes ágazat"] + lab_df["label"].tolist()
+with col_sep:
+    st.markdown(
+        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
+        unsafe_allow_html=True,
+    )
 
-# Két ágazat kiválasztása
-sel_label_A = st.sidebar.selectbox("Ágazat A", options, index=0)
-sel_label_B = st.sidebar.selectbox("Ágazat B", options, index=min(1, len(options)-1))
+# ----------------------- Beállítások (Bal oldal) ---------------------------
+with col_settings:
+    st.header("Beállítások")
 
-# Változók (pénzügyi: millió Ft)
-if st.session_state['real_data'] == True:
-    MONETARY_VARS = {
-        'Értékesítés (millió Ft)': 'sales_clean',
-        'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-        'Eszközök összesen (millió Ft)': 'eszk',
-        'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-        'Adózás előtti eredmény (millió Ft)': 'pretax',
-        'EBIT (millió Ft)': 'ereduzem',
-        'Export értéke (millió Ft)': 'export_value',
-        'Kötelezettségek (millió Ft)': 'liabilities',
-        'Anyag jellegű ráfordítások (millió Ft)':'ranyag',
-        'Jegyzett tőke (millió Ft)':'jetok',
-        'Támogatás mértéke (millió Ft)':'grant_value'
+    # Ágazati opciók: ÖSSZES elöl, majd kódszám szerint
+    lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
+    lab_df["__code"] = pd.to_numeric(lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
+                                     errors="coerce")
+    lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
+    options = ["Összes ágazat"] + lab_df["label"].tolist()
+
+    # Két ágazat kiválasztása
+    sel_label_A = st.selectbox("Ágazat A", options, index=0)
+    sel_label_B = st.selectbox("Ágazat B", options, index=min(1, len(options)-1))
+
+    # Változók (pénzügyi: millió Ft)
+    if st.session_state['real_data'] == True:
+        MONETARY_VARS = {
+            'Értékesítés (millió Ft)': 'sales_clean',
+            'Tárgyi eszközök (millió Ft)': 'tanass_clean',
+            'Eszközök összesen (millió Ft)': 'eszk',
+            'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
+            'Adózás előtti eredmény (millió Ft)': 'pretax',
+            'EBIT (millió Ft)': 'ereduzem',
+            'Export értéke (millió Ft)': 'export_value',
+            'Kötelezettségek (millió Ft)': 'liabilities',
+            'Anyag jellegű ráfordítások (millió Ft)':'ranyag',
+            'Jegyzett tőke (millió Ft)':'jetok',
+            'Támogatás mértéke (millió Ft)':'grant_value'
+        }
+    else:
+        MONETARY_VARS = {
+            'Értékesítés (millió Ft)': 'sales_clean',
+            'Tárgyi eszközök (millió Ft)': 'tanass_clean',
+            'Eszközök összesen (millió Ft)': 'eszk',
+            'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
+            'Adózás előtti eredmény (millió Ft)': 'pretax',
+            'EBIT (millió Ft)': 'ereduzem',
+            'Export értéke (millió Ft)': 'export_value',
+            'Kötelezettségek (millió Ft)': 'liabilities'
+        }
+
+    NON_MONETARY_VARS = {
+        'Foglalkoztatottak száma (fő)': 'emp',
+        'Kor (év)': 'age',
     }
-else:
-    MONETARY_VARS = {
-        'Értékesítés (millió Ft)': 'sales_clean',
-        'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-        'Eszközök összesen (millió Ft)': 'eszk',
-        'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-        'Adózás előtti eredmény (millió Ft)': 'pretax',
-        'EBIT (millió Ft)': 'ereduzem',
-        'Export értéke (millió Ft)': 'export_value',
-        'Kötelezettségek (millió Ft)': 'liabilities'
-    }
+    var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
 
-NON_MONETARY_VARS = {
-    'Foglalkoztatottak száma (fő)': 'emp',
-    'Kor (év)': 'age',
-}
-var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
+    available = {k: v for k, v in var_map.items() if v in cs.columns}
+    x_label = st.selectbox("X változó", list(available.keys()), index=0)
+    y_label = st.selectbox("Y változó", list(available.keys()), index=min(4, len(available)-1))
 
-available = {k: v for k, v in var_map.items() if v in cs.columns}
-x_label = st.sidebar.selectbox("X változó", list(available.keys()), index=0)
-y_label = st.sidebar.selectbox("Y változó", list(available.keys()), index=min(4, len(available)-1))
 xvar = available[x_label]; yvar = available[y_label]
 x_is_monetary = xvar in MONETARY_VARS.values()
 y_is_monetary = yvar in MONETARY_VARS.values()
@@ -123,56 +133,71 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 # ----------------------- Szélsőérték-kezelés: 4 opció / tengely -----------------------
 FILTER_OPTIONS = [
     "Nincs szűrés",
-    "Winsor top–bottom 2%",
-    "Levágás top–bottom 2%",
-    "Levágás (kézi megadás)"
+    "Kézi minimum/maximum"
 ]
-st.sidebar.subheader("Szélsőérték-kezelés")
-x_filter = st.sidebar.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-# y_filter = st.sidebar.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+with col_settings:
+    with st.expander("Szélsőérték-kezelés"):
+        x_filter = st.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        # y_filter = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
 
-# Kézi százalékok megadása, ha szükséges
-x_low_manual, x_high_manual = 2.0, 98.0
-y_low_manual, y_high_manual = 2.0, 98.0
-if x_filter == "Levágás (kézi megadás)":
-    x_low_manual = st.sidebar.number_input("X alsó percentilis (%)", min_value=0.0, max_value=49.0, value=2.0, step=0.5)
-    x_high_manual = st.sidebar.number_input("X felső percentilis (%)", min_value=51.0, max_value=100.0, value=98.0, step=0.5)
+        # Calculate global min/max for defaults
+        df_global = cs.copy()
+        if x_is_monetary:
+            df_global[xvar] = df_global[xvar] / 1000.0
+        
+        current_min_x = float(np.nanmin(df_global[xvar]))
+        current_max_x = float(np.nanmax(df_global[xvar]))
+
+        x_low_manual, x_high_manual = None, None
+        y_low_manual, y_high_manual = None, None
+
+        if x_filter == "Kézi minimum/maximum":
+            st.markdown("**X kézi határok (a megjelenített egységben)**")
+            x_low_manual = st.number_input("X minimum", value=current_min_x)
+            x_high_manual = st.number_input("X maximum", value=current_max_x)
+            
+            if x_low_manual > x_high_manual:
+                st.error("A minimum nem lehet nagyobb a maximumnál.")
+                x_low_manual, x_high_manual = x_high_manual, x_low_manual
 
 # ----------------------- Bin scatter opció (mint az első scriptben) -----------------------
-st.sidebar.subheader("Ábra beállítások")
-BIN_SCATTER_OPTIONS = [
-    "Eredeti",
-    "5 bin",
-    "10 bin",
-    "20 bin",
-    "100 bin"
-]
-bin_scatter_choice = st.sidebar.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
-bin_scatter_map = {
-    "5 bin": 5,
-    "10 bin": 10,
-    "20 bin": 20,
-    "100 bin": 100
-}
-n_bins = bin_scatter_map.get(bin_scatter_choice, None)
-use_bin_scatter = n_bins is not None
+with col_settings:
+    with st.expander("Ábra beállítások"):
+        BIN_SCATTER_OPTIONS = [
+            "Eredeti",
+            "5 bin",
+            "10 bin",
+            "20 bin",
+            "100 bin"
+        ]
+        bin_scatter_choice = st.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
+        bin_scatter_map = {
+            "5 bin": 5,
+            "10 bin": 10,
+            "20 bin": 20,
+            "100 bin": 100
+        }
+        n_bins = bin_scatter_map.get(bin_scatter_choice, None)
+        use_bin_scatter = n_bins is not None
 
-# Illesztés típusa
-fit_type = st.sidebar.selectbox(
-    "Illesztés rárajzolása",
-    ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsőzetes (5 bin)", "Lépcsőzetes (20 bin)"],
-    index=0
-)
-if fit_type == "LOWESS" and not HAS_LOWESS:
-    st.sidebar.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
+        # Illesztés típusa
+        fit_type = st.selectbox(
+            "Illesztés rárajzolása",
+            ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsőzetes (5 bin)", "Lépcsőzetes (20 bin)"],
+            index=0
+        )
+        if fit_type == "LOWESS" and not HAS_LOWESS:
+            st.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
 
-# Ábra megjelenés
-alpha = st.sidebar.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
-size  = st.sidebar.slider("Pontméret", 5, 100, 20, 1)
+        # Ábra megjelenés
+        st.markdown("#### Megjelenítés")
+        alpha = st.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
+        size  = st.slider("Pontméret", 5, 100, 20, 1)
 
-# Log skálák
-logx = st.sidebar.checkbox("Logaritmikus skála X", value=False)
-logy = st.sidebar.checkbox("Logaritmikus skála Y", value=False)
+        # Log skálák
+        st.markdown("#### Skála")
+        logx = st.checkbox("Logaritmikus skála X", value=False)
+        logy = st.checkbox("Logaritmikus skála Y", value=False)
 
 # ----------------------- Segédfüggvények ---------------------------
 def filter_scope(df: pd.DataFrame, label: str) -> pd.DataFrame:
@@ -180,29 +205,19 @@ def filter_scope(df: pd.DataFrame, label: str) -> pd.DataFrame:
         return df.copy()
     return df[df["nace2_name_code"] == label].copy()
 
-def apply_filter(series: pd.Series, mode: str, low_pct: float = 2.0, high_pct: float = 98.0) -> pd.Series:
+def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
     """
     mode ∈ FILTER_OPTIONS
     - Nincs szűrés: változatlan
-    - Winsor top–bottom 2%: 2/98 percentilen klippelés
-    - Levágás top–bottom 2%: 2/98 percentilen kívüliek eldobása
-    - Levágás (kézi megadás): low_pct/high_pct percentilen kívüliek eldobása
+    - Kézi minimum/maximum: low_val/high_val határokon kívüliek eldobása
     """
     s = series.dropna()
     if len(s) < 5 or mode == "Nincs szűrés":
         return s
 
-    if mode == "Winsor top–bottom 2%":
-        ql, qh = np.percentile(s, [2, 98])
-        return s.clip(ql, qh)
-
-    if mode == "Levágás top–bottom 2%":
-        ql, qh = np.percentile(s, [2, 98])
-        return s[(s > ql) & (s < qh)]
-
-    if mode == "Levágás (kézi megadás)":
-        ql, qh = np.percentile(s, [low_pct, high_pct])
-        return s[(s > ql) & (s < qh)]
+    if mode == "Kézi minimum/maximum":
+        if low_val is not None and high_val is not None:
+            return s[(s > low_val) & (s < high_val)]
 
     return s
 
@@ -221,12 +236,8 @@ def inv_y(v):
 def tail_note_txt(mode, low=None, high=None):
     if mode == "Nincs szűrés":
         return "nincs"
-    if mode == "Winsor top–bottom 2%":
-        return "winsor 2–98%"
-    if mode == "Levágás top–bottom 2%":
-        return "levágás 2–98%"
-    if mode == "Levágás (kézi megadás)":
-        return f"levágás {low:.1f}–{high:.1f}%"
+    if mode == "Kézi minimum/maximum":
+        return f"kézi [{low:.2f}, {high:.2f}]"
     return "—"
 
 def plot_one(scope_df: pd.DataFrame, title: str):
@@ -382,32 +393,34 @@ def plot_one(scope_df: pd.DataFrame, title: str):
     return fig, coef_text, len(plot_df)
 
 # ----------------------- Két oszlop ----------------------
-colA, colB = st.columns(2, gap="large")
+with col_viz:
+    colA, colB = st.columns(2, gap="large")
 
-with colA:
-    scope_A = filter_scope(cs, sel_label_A)
-    figA, coefA, nA = plot_one(scope_A, f"A: {sel_label_A}")
-    if figA is not None:
-        st.pyplot(figA)
-        if coefA is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet:** {coefA}")
+    with colA:
+        scope_A = filter_scope(cs, sel_label_A)
+        figA, coefA, nA = plot_one(scope_A, f"A: {sel_label_A}")
+        if figA is not None:
+            st.pyplot(figA)
+            if coefA is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
+                st.markdown(f"**Illesztési egyenlet:** {coefA}")
 
-with colB:
-    scope_B = filter_scope(cs, sel_label_B)
-    figB, coefB, nB = plot_one(scope_B, f"B: {sel_label_B}")
-    if figB is not None:
-        st.pyplot(figB)
-        if coefB is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
-            st.markdown(f"**Illesztési egyenlet:** {coefB}")
+    with colB:
+        scope_B = filter_scope(cs, sel_label_B)
+        figB, coefB, nB = plot_one(scope_B, f"B: {sel_label_B}")
+        if figB is not None:
+            st.pyplot(figB)
+            if coefB is not None and fit_type in {"Lineáris", "Kvadratikus", "Köbös"}:
+                st.markdown(f"**Illesztési egyenlet:** {coefB}")
 
 # ----------------------- Lábléc összegzés -------------------
 tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
 bin_note = bin_scatter_choice
 
-st.markdown(
-    f"**Ágazatok:** A = {sel_label_A} · B = {sel_label_B} · "
-   # f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
-   # f"**Log (X/Y):** {logx} / {logy} · "
-   # f"**Szélső értékek (X/Y):** {tail_note_x} · "
-   # f"**Bin scatter:** {bin_note}"
-)
+with col_viz:
+    st.markdown(
+        f"**Ágazatok:** A = {sel_label_A} · B = {sel_label_B} · "
+       # f"**X:** `{x_label}` · **Y:** `{y_label}` · **Illesztés:** {fit_type} · "
+       # f"**Log (X/Y):** {logx} / {logy} · "
+       # f"**Szélső értékek (X/Y):** {tail_note_x} · "
+       # f"**Bin scatter:** {bin_note}"
+    )

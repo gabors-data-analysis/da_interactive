@@ -168,35 +168,45 @@ st.markdown(
     "A táblázat sorai a NACE1 csoportok, az oszlopok: korreláció és elemszám (*n*)."
 )
 
-# --------------------------- Oldalsáv: változók ---------------------------
-st.sidebar.header("Beállítások")
+col_settings, col_sep, col_viz = st.columns([4, 2, 12])
 
-available = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
-if len(available) < 2:
-    st.error("Nincs elég elérhető változó az adatokban a korrelációhoz.")
-    st.stop()
+with col_sep:
+    st.markdown(
+        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
+        unsafe_allow_html=True,
+    )
 
-available_keys = list(available.keys())
+# --------------------------- Beállítások (Bal oldal) ---------------------------
+with col_settings:
+    st.header("Beállítások")
 
-# baseline index a Változó 1-hez
-if BASELINE_LABEL in available_keys:
-    x_index = available_keys.index(BASELINE_LABEL)
-else:
-    x_index = 0
+    available = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
+    if len(available) < 2:
+        st.error("Nincs elég elérhető változó az adatokban a korrelációhoz.")
+        st.stop()
 
-x_label = st.sidebar.selectbox("Változó 1", available_keys, index=x_index)
+    available_keys = list(available.keys())
 
-y_options = [k for k in available_keys if k != x_label]
-y_label = st.sidebar.selectbox("Változó 2", y_options, index=0)
+    # baseline index a Változó 1-hez
+    if BASELINE_LABEL in available_keys:
+        x_index = available_keys.index(BASELINE_LABEL)
+    else:
+        x_index = 0
 
-xvar = available[x_label]
-yvar = available[y_label]
+    x_label = st.selectbox("Változó 1", available_keys, index=x_index)
 
-sort_choice = st.sidebar.radio(
-    "Rendezés a táblázatban",
-    ["Ágazat szerint", "Korreláció szerint (csökkenő)"],
-    index=0
-)
+    y_options = [k for k in available_keys if k != x_label]
+    y_label = st.selectbox("Változó 2", y_options, index=0)
+
+    xvar = available[x_label]
+    yvar = available[y_label]
+
+    with st.expander("Megjelenítés"):
+        sort_choice = st.radio(
+            "Rendezés a táblázatban",
+            ["Ágazat szerint", "Korreláció szerint (csökkenő)"],
+            index=0
+        )
 
 # --------------------------- Előkészítés ---------------------------
 df = cs.copy()
@@ -275,17 +285,18 @@ else:
 result_display = result.drop(columns=["nace1_code"])
 
 # --------------------------- Megjelenítés ---------------------------
-st.subheader("Korrelációk NACE1 csoportonként")
+with col_viz:
+    st.subheader("Korrelációk NACE1 csoportonként")
 
-st.dataframe(
-    result_display.style.format({
-        corr_col_name: "{:.3f}",
-        "n": "{:,.0f}"
-    }),
-    width="stretch",
-    column_order=["Ágazat",corr_col_name,"n"]
-)
+    st.dataframe(
+        result_display.style.format({
+            corr_col_name: "{:.3f}",
+            "n": "{:,.0f}"
+        }),
+        width="stretch",
+        column_order=["Ágazat",corr_col_name,"n"]
+    )
 
-st.caption(
-    "Megjegyzés: Pearson-féle korrelációs együttható. "
-)
+    st.caption(
+        "Megjegyzés: Pearson-féle korrelációs együttható. "
+    )

@@ -173,20 +173,29 @@ Lehetséges kimenetek:
 """
 )
 
-# ------------------------------------------------------
-# Oldalsáv: ágazati szűrő
-# ------------------------------------------------------
-st.sidebar.header("Szűrők és modell")
+col_settings, col_sep, col_viz = st.columns([4, 2, 12])
 
-lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
-lab_df["__code"] = pd.to_numeric(
-    lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
-    errors="coerce"
-)
-lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
-industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
+with col_sep:
+    st.markdown(
+        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
+        unsafe_allow_html=True,
+    )
 
-sel_industry = st.sidebar.selectbox("Ágazat", industry_opts, index=0)
+# ------------------------------------------------------
+# Beállítások (Bal oldal)
+# ------------------------------------------------------
+with col_settings:
+    st.header("Beállítások")
+
+    lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
+    lab_df["__code"] = pd.to_numeric(
+        lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
+        errors="coerce"
+    )
+    lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
+    industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
+
+    sel_industry = st.selectbox("Ágazat", industry_opts, index=0)
 if sel_industry == "Összes ágazat":
     d = df.copy()
 else:
@@ -236,7 +245,8 @@ if "ln_sales" in d.columns:
 
 available = list(available) + extra_y_labels
 
-outcome_choice = st.sidebar.selectbox("Kimenet", available, index=0)
+with col_settings:
+    outcome_choice = st.selectbox("Kimenet", available, index=0)
 y_col = label_to_col[outcome_choice]
 
 # ------------------------------------------------------
@@ -320,31 +330,33 @@ cat_label_to_col = {col_to_label(c): c for c in categorical_cols}
 # ------------------------------------------------------
 # Modelleket építő UI (Modell 1 & Modell 2)
 # ------------------------------------------------------
-st.sidebar.subheader("Magyarázó változók — Modell 1")
-cont_labels_1 = st.sidebar.multiselect(
-    "Folytonos magyarázó változók – Modell 1",
-    options=sorted(num_label_to_col.keys()),
-    key="cont_m1"
-)
-cat_labels_1 = st.sidebar.multiselect(
-    "Kategorikus magyarázó változók – Modell 1",
-    options=sorted(cat_label_to_col.keys()),
-    key="cat_m1"
-)
+with col_settings:
+    with st.expander("Modell 1 Változók"):
+        cont_labels_1 = st.multiselect(
+            "Folytonos magyarázó változók – Modell 1",
+            options=sorted(num_label_to_col.keys()),
+            key="cont_m1"
+        )
+        cat_labels_1 = st.multiselect(
+            "Kategorikus magyarázó változók – Modell 1",
+            options=sorted(cat_label_to_col.keys()),
+            key="cat_m1"
+        )
 cont_vars_1 = [num_label_to_col[l] for l in cont_labels_1]
 cat_vars_1 = [cat_label_to_col[l] for l in cat_labels_1]
 
-st.sidebar.subheader("Magyarázó változók — Modell 2")
-cont_labels_2 = st.sidebar.multiselect(
-    "Folytonos magyarázó változók – Modell 2",
-    options=sorted(num_label_to_col.keys()),
-    key="cont_m2"
-)
-cat_labels_2 = st.sidebar.multiselect(
-    "Kategorikus magyarázó változók — Modell 2",
-    options=sorted(cat_label_to_col.keys()),
-    key="cat_m2"
-)
+with col_settings:
+    with st.expander("Modell 2 Változók"):
+        cont_labels_2 = st.multiselect(
+            "Folytonos magyarázó változók – Modell 2",
+            options=sorted(num_label_to_col.keys()),
+            key="cont_m2"
+        )
+        cat_labels_2 = st.multiselect(
+            "Kategorikus magyarázó változók — Modell 2",
+            options=sorted(cat_label_to_col.keys()),
+            key="cat_m2"
+        )
 cont_vars_2 = [num_label_to_col[l] for l in cont_labels_2]
 cat_vars_2 = [cat_label_to_col[l] for l in cat_labels_2]
 
@@ -359,149 +371,149 @@ if not rhs_cols_all:
 spline_specs = {}  # v -> list of knots (possibly empty)
 spline_candidates = sorted(set(cont_vars_1) | set(cont_vars_2))
 
-with st.sidebar.expander("Lineáris spline beállítások", expanded=False):
-    if not spline_candidates:
-        st.markdown("*Nincs kiválasztott folytonos magyarázó változó.*")
-    for v in spline_candidates:
-        label = col_to_label(v)
-        use_spline = st.checkbox(f"{label} lineáris spline", value=False, key=f"spline_use__{v}")
-        if not use_spline:
-            continue
+with col_settings:
+    with st.expander("Lineáris spline beállítások", expanded=False):
+        if not spline_candidates:
+            st.markdown("*Nincs kiválasztott folytonos magyarázó változó.*")
+        for v in spline_candidates:
+            label = col_to_label(v)
+            use_spline = st.checkbox(f"{label} lineáris spline", value=False, key=f"spline_use__{v}")
+            if not use_spline:
+                continue
 
-        series = pd.to_numeric(d[v], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-        if len(series) < 5:
-            st.warning(f"Nincs elég adat a spline-hoz: {label}")
-            continue
+            series = pd.to_numeric(d[v], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+            if len(series) < 5:
+                st.warning(f"Nincs elég adat a spline-hoz: {label}")
+                continue
 
-        n_knots = st.selectbox(
-            f"Határpontok száma – {label}",
-            options=[1, 2],
-            index=0,
-            key=f"spline_nk__{v}"
-        )
-
-        knots = []
-        q1 = float(series.quantile(1/3))
-        q2 = float(series.quantile(2/3))
-
-        k1 = st.number_input(
-            f"{label} 1. határ",
-            value=q1,
-            key=f"spline_k1__{v}"
-        )
-        knots.append(k1)
-
-        if n_knots == 2:
-            k2 = st.number_input(
-                f"{label} 2. határ",
-                value=q2,
-                key=f"spline_k2__{v}"
+            n_knots = st.selectbox(
+                f"Határpontok száma – {label}",
+                options=[1, 2],
+                index=0,
+                key=f"spline_nk__{v}"
             )
-            knots.append(k2)
 
-        knots = sorted(knots)
-        spline_specs[v] = knots
+            knots = []
+            q1 = float(series.quantile(1/3))
+            q2 = float(series.quantile(2/3))
 
-        # --- Label-ek a spline szegmensekhez (piecewise) ---
-        base_label = col_to_label(v)
-        n_segments = len(knots) + 1
-        for i in range(n_segments):
-            if i == 0:
-                if len(knots) > 0:
-                    desc = f"≤ {knots[0]:.2f}"
+            k1 = st.number_input(
+                f"{label} 1. határ",
+                value=q1,
+                key=f"spline_k1__{v}"
+            )
+            knots.append(k1)
+
+            if n_knots == 2:
+                k2 = st.number_input(
+                    f"{label} 2. határ",
+                    value=q2,
+                    key=f"spline_k2__{v}"
+                )
+                knots.append(k2)
+
+            knots = sorted(knots)
+            spline_specs[v] = knots
+
+            # --- Label-ek a spline szegmensekhez (piecewise) ---
+            base_label = col_to_label(v)
+            n_segments = len(knots) + 1
+            for i in range(n_segments):
+                if i == 0:
+                    if len(knots) > 0:
+                        desc = f"≤ {knots[0]:.2f}"
+                    else:
+                        desc = ""
+                elif i < len(knots):
+                    desc = f"({knots[i-1]:.2f}, {knots[i]:.2f}]"
                 else:
-                    desc = ""
-            elif i < len(knots):
-                desc = f"({knots[i-1]:.2f}, {knots[i]:.2f}]"
-            else:
-                desc = f"> {knots[-1]:.2f}"
-            VAR_LABELS_BY_COL[f"{v}_spline_{i+1}"] = f"{base_label} spline szakasz {i+1} ({desc})"
+                    desc = f"> {knots[-1]:.2f}"
+                VAR_LABELS_BY_COL[f"{v}_spline_{i+1}"] = f"{base_label} spline szakasz {i+1} ({desc})"
 
 # ------------------------------------------------------
 # Szélsőérték-kezelés (Y + választható folytonos X-ek)
 # ------------------------------------------------------
 FILTER_OPTIONS = [
     "Nincs szűrés",
-    "Winsor top–bottom 2%",
-    "Levágás top–bottom 2%",
     "Kézi minimum/maximum"
 ]
 
-with st.sidebar.expander("Szélsőérték-kezelés (Y és X-ek)", expanded=False):
-    # --- Y filter ---
-    y_filter = st.selectbox("**Y szélsőérték-kezelése**", FILTER_OPTIONS, index=0)
+with col_settings:
+    with st.expander("Szélsőérték-kezelés (Y és X-ek)", expanded=False):
+        # --- Y filter ---
+        y_filter = st.selectbox("**Y szélsőérték-kezelése**", FILTER_OPTIONS, index=0)
 
-    if y_filter == "Kézi minimum/maximum":
-        st.markdown("**Y kézi határok (a kimenet egységében)**")
-        y_clean = y.replace([np.inf, -np.inf], np.nan).dropna()
-        if len(y_clean) > 0:
-            current_min_y = float(np.nanmin(y_clean))
-            current_max_y = float(np.nanmax(y_clean))
-        else:
-            current_min_y, current_max_y = 0.0, 1.0
-        y_low_manual = st.number_input(
-            "Y minimum",
-            value=current_min_y,
-            step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-        )
-        y_high_manual = st.number_input(
-            "Y maximum",
-            value=current_max_y,
-            step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
-        )
-        if y_low_manual > y_high_manual:
-            st.error("Y esetén a minimum nem lehet nagyobb a maximumnál.")
-            y_low_manual, y_high_manual = y_high_manual, y_low_manual
-    else:
-        y_low_manual = None
-        y_high_manual = None
-
-    # --- X filters: user chooses which continuous vars to filter ---
-    st.markdown("**X-ek szűrése:**")
-
-    x_filterable_labels = sorted(num_label_to_col.keys())
-    x_filter_labels_selected = st.multiselect(
-        "Változók a szűréshez",
-        options=x_filterable_labels,
-        key="x_filter_vars"
-    )
-
-    x_filters = {}  # col_name -> (mode, low, high)
-    for lbl in x_filter_labels_selected:
-        col = num_label_to_col[lbl]
-        mode = st.selectbox(
-            f"{lbl} szélsőérték-kezelése",
-            FILTER_OPTIONS,
-            index=0,
-            key=f"x_filter_mode__{col}"
-        )
-
-        low_val = high_val = None
-        if mode == "Kézi minimum/maximum":
-            series = pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-            if len(series) > 0:
-                cur_min = float(np.nanmin(series))
-                cur_max = float(np.nanmax(series))
+        if y_filter == "Kézi minimum/maximum":
+            st.markdown("**Y kézi határok (a megjelenített egységben)**")
+            y_clean = y.replace([np.inf, -np.inf], np.nan).dropna()
+            if len(y_clean) > 0:
+                current_min_y = float(np.nanmin(y_clean))
+                current_max_y = float(np.nanmax(y_clean))
             else:
-                cur_min, cur_max = 0.0, 1.0
-            st.markdown(f"**{lbl} kézi határok**")
-            low_val = st.number_input(
-                f"{lbl} minimum",
-                value=cur_min,
-                step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
-                key=f"x_filter_low__{col}"
+                current_min_y, current_max_y = 0.0, 1.0
+            y_low_manual = st.number_input(
+                "Y minimum",
+                value=current_min_y,
+                step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
             )
-            high_val = st.number_input(
-                f"{lbl} maximum",
-                value=cur_max,
-                step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
-                key=f"x_filter_high__{col}"
+            y_high_manual = st.number_input(
+                "Y maximum",
+                value=current_max_y,
+                step=(current_max_y - current_min_y)/100 if current_max_y > current_min_y else 1.0
             )
-            if low_val > high_val:
-                st.error(f"{lbl} esetén a minimum nem lehet nagyobb a maximumnál.")
-                low_val, high_val = high_val, low_val
+            if y_low_manual > y_high_manual:
+                st.error("Y esetén a minimum nem lehet nagyobb a maximumnál.")
+                y_low_manual, y_high_manual = y_high_manual, y_low_manual
+        else:
+            y_low_manual = None
+            y_high_manual = None
 
-        x_filters[col] = (mode, low_val, high_val)
+        # --- X filters: user chooses which continuous vars to filter ---
+        st.markdown("**X-ek szűrése:**")
+
+        x_filterable_labels = sorted(num_label_to_col.keys())
+        x_filter_labels_selected = st.multiselect(
+            "Változók a szűréshez",
+            options=x_filterable_labels,
+            key="x_filter_vars"
+        )
+
+        x_filters = {}  # col_name -> (mode, low, high)
+        for lbl in x_filter_labels_selected:
+            col = num_label_to_col[lbl]
+            mode = st.selectbox(
+                f"{lbl} szélsőérték-kezelése",
+                FILTER_OPTIONS,
+                index=0,
+                key=f"x_filter_mode__{col}"
+            )
+
+            low_val = high_val = None
+            if mode == "Kézi minimum/maximum":
+                series = pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+                if len(series) > 0:
+                    cur_min = float(np.nanmin(series))
+                    cur_max = float(np.nanmax(series))
+                else:
+                    cur_min, cur_max = 0.0, 1.0
+                st.markdown(f"**{lbl} kézi határok (a megjelenített egységben)**")
+                low_val = st.number_input(
+                    f"{lbl} minimum",
+                    value=cur_min,
+                    step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
+                    key=f"x_filter_low__{col}"
+                )
+                high_val = st.number_input(
+                    f"{lbl} maximum",
+                    value=cur_max,
+                    step=(cur_max - cur_min)/100 if cur_max > cur_min else 1.0,
+                    key=f"x_filter_high__{col}"
+                )
+                if low_val > high_val:
+                    st.error(f"{lbl} esetén a minimum nem lehet nagyobb a maximumnál.")
+                    low_val, high_val = high_val, low_val
+
+            x_filters[col] = (mode, low_val, high_val)
 
 if "y_filter" not in locals():
     y_filter = "Nincs szűrés"
@@ -513,14 +525,6 @@ def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) 
     s = series.replace([np.inf, -np.inf], np.nan).dropna()
     if len(s) < 5 or mode == "Nincs szűrés":
         return s
-
-    if mode == "Winsor top–bottom 2%":
-        q_low, q_high = np.percentile(s, [2, 98])
-        return s.clip(q_low, q_high)
-
-    if mode == "Levágás top–bottom 2%":
-        q_low, q_high = np.percentile(s, [2, 98])
-        return s[(s > q_low) & (s < q_high)]
 
     if mode == "Kézi minimum/maximum":
         if low_val is None or high_val is None:
@@ -767,16 +771,18 @@ def build_summary_table(models, model_labels):
 summary_table = build_summary_table([res1, res2], ["Modell 1", "Modell 2"])
 
 if summary_table is not None:
-    left_spacer, mid_col, right_spacer = st.columns([1, 3, 1])
-    with mid_col:
-        st.table(summary_table, border=False)
+    with col_viz:
+        left_spacer, mid_col, right_spacer = st.columns([1, 3, 1])
+        with mid_col:
+            st.table(summary_table, border=False)
 else:
     st.error("Nem sikerült regressziós összefoglalót készíteni.")
 
-note = "Zárójelben a robusztus (HC1) standard hibák szerepelnek."
+with col_viz:
+    note = "Zárójelben a robusztus (HC1) standard hibák szerepelnek."
 
-st.markdown(
-    f"<span style='font-size:0.85rem'><em>Megjegyzés:</em> {note} "
-    "Szignifikanciaszintek: *** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1.</span>",
-    unsafe_allow_html=True,
-)
+    st.markdown(
+        f"<span style='font-size:0.85rem'><em>Megjegyzés:</em> {note} "
+        "Szignifikanciaszintek: *** p&lt;0.01, ** p&lt;0.05, * p&lt;0.1.</span>",
+        unsafe_allow_html=True,
+    )
