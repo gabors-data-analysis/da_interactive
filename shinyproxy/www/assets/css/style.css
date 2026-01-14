@@ -12,6 +12,13 @@ a {
 	background-color: #f7f9fc;
 	border-color: #EBEFF4;
 }
+a.navbar-brand {
+	font-size: 24px;
+  text-transform: uppercase;
+}
+a.navbar-brand:hover {
+	color: #23527c !important;
+}
 
 .list-group .list-group-item {
 	background-color: #d8f1f1;

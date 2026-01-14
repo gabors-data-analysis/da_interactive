@@ -131,52 +131,66 @@ def add_stars(val):
         return ""
     
 def get_summary_table(reg_list):
+
     summary_tables = []
+
     for reg in reg_list:
-        # Build parameter table
-        results_df = pd.DataFrame({
-            'params': reg.params,
-            'stderr': reg.bse,
-            'pvalues': reg.pvalues
+        # Basic results
+        df = pd.DataFrame({
+            "params": reg.params,
+            "stderr": reg.bse,
+            "pvalues": reg.pvalues
         })
-        results_df['stars'] = results_df['pvalues'].apply(add_stars)
 
         # Clean variable names
-        results_df.index = [
-            i.replace('_', ' ')
-             .replace('[T.', ' (')
-             .replace(']', ')')
-             .replace(':', ' x ')
-            for i in results_df.index
+        df.index = [
+            i.replace("_", " ")
+             .replace("[T.", " (")
+             .replace("]", ")")
+             .replace(":", " x ")
+            for i in df.index
         ]
+       
+        df["stars"] = df["pvalues"].apply(add_stars)
 
-        # Build formatted summary column
-        results_df['summary'] = (
-            results_df['params'].round(3).astype(str)
-            + results_df['stars']
-            + ' (' + results_df['stderr'].round(3).astype(str) + ')'
+        ordered_vars = ["Intercept", "Female"] + [
+            v for v in df.index if v not in ["Intercept", "Female"]
+        ]
+        df = df.loc[[v for v in ordered_vars if v in df.index]]
+
+        rows = []
+        index_labels = []
+        for var in df.index:
+            coef_str = f"{df.loc[var, 'params']:.3f}{df.loc[var, 'stars']}"
+            se_str = f"({df.loc[var, 'stderr']:.3f})"
+            rows.extend([coef_str, se_str])
+            index_labels.extend([var, f"{var}_se"])
+
+        results_df = pd.DataFrame({"summary": rows}, index=index_labels)
+
+        # Add separator, R² and N
+        extra_rows = pd.DataFrame(
+            {"summary": ["-------",
+                         f"{reg.rsquared:.3f}",
+                         f"{int(reg.nobs)}"]},
+            index=["-------", "R-squared", "Number of Observations"]
         )
 
-        # Add N and R² rows
-        extra_rows = pd.DataFrame({
-            'summary': ['-------', str(round(reg.rsquared, 3))]
-        }, index=['-------', 'R-squared'])
-
-        # Combine
-        results_df = pd.concat([results_df[['summary']], extra_rows])
+        results_df = pd.concat([results_df, extra_rows])
 
         summary_tables.append(results_df)
 
-    # Combine all models side-by-side
+    # Combine all models side by side
     combined_table = pd.concat(summary_tables, axis=1)
-    combined_table.columns = [f'Model {i+1}' for i in range(len(reg_list))]
+    combined_table.columns = [f"Model {i+1}" for i in range(len(reg_list))]
 
-    # Reorder so Intercept, Female appear first if present
-    ordered_index = ['Intercept', 'Female'] + [
-        row for row in combined_table.index
-        if row not in ['Intercept', 'Female', '-------', 'R-squared']
-    ] + ['-------', 'R-squared']
-    return combined_table.reindex(ordered_index).fillna('')
+    # reorder so that R-squared and N are at the bottom
+    combined_table = combined_table.reindex(
+        index=[idx for idx in combined_table.index if idx not in ["R-squared", "Number of Observations", "-------"]] +
+              ["-------", "R-squared", "Number of Observations"]
+    )
+
+    return combined_table.fillna("")
 
 st.sidebar.header('Regression Specification')
 st.sidebar.markdown('Note: First model is always the baseline with no controls or interactions. Select controls and interactions for up to 2 additional models.')
@@ -218,12 +232,29 @@ reg1 = smf.ols(formula='ln_wage ~ Female', data=st.session_state.cps).fit(cov_ty
 reg2 = smf.ols(formula=get_formula(controls_model_2, interactions_model_2), data=st.session_state.cps).fit(cov_type='HC1')
 reg3 = smf.ols(formula=get_formula(controls_model_3, interactions_model_3), data=st.session_state.cps).fit(cov_type='HC1')
 
-summary_table = get_summary_table([reg1, reg2, reg3])
 st.markdown('#### Regression Results Summary Table')
 show_key = st.checkbox('Only show key results (intercept, female dummy and its interactions):', value=True)
 if show_key:
-    st.table(data = summary_table.loc[summary_table.index.str.contains('Female|Intercept|R-squared|-------')], border = False)
+    summary_table = get_summary_table([reg1, reg2, reg3])
+    summary_table = summary_table.loc[summary_table.index.str.contains('Female|Intercept|R-squared|-------|Number of Observations')]
+    # Make row labels nice: hide the "_se" suffix rows
+    nice_index = []
+    for idx in summary_table.index:
+        if isinstance(idx, str) and idx.endswith("_se"):
+            nice_index.append("")  # blank row label for std. errors
+        else:
+            nice_index.append(idx)
+    summary_table.index = nice_index
+    st.table(data = summary_table, border = False)
 else:
+    summary_table = get_summary_table([reg1, reg2, reg3])
+    nice_index = []
+    for idx in summary_table.index:
+        if isinstance(idx, str) and idx.endswith("_se"):
+            nice_index.append("")  # blank row label for std. errors
+        else:
+            nice_index.append(idx)
+    summary_table.index = nice_index
     st.table(data = summary_table, border = False)
 
 st.markdown("""*Notes: Robust standard errors (HC1) are in parentheses. Significance levels: *** p<0.01, ** p<0.05, * p<0.1.*""")
