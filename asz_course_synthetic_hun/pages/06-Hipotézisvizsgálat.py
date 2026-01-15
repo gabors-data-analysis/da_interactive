@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from scipy import stats
+import utils
 
 # próbálunk SciPy-t használni pontos t-próbához
 try:
@@ -172,18 +173,30 @@ with col_sep:
 with col_settings:
     st.header("Beállítások")
 
+    sync_on = utils.render_sync_option(st)
+
     available_vars = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
     if not available_vars:
         st.error("Nincs elérhető folytonos változó az adatokban.")
         st.stop()
 
-    y_label = st.selectbox("Változó", list(available_vars.keys()), index=0)
+    avail_keys = list(available_vars.keys())
+    
+    # Sync Primary (Y)
+    y_idx = utils.get_synced_index(avail_keys, "global_primary_var")
+    y_label = st.selectbox("Változó", avail_keys, index=y_idx)
+    utils.update_synced_state("global_primary_var", y_label)
+
     yvar = available_vars[y_label]
     y_is_monetary = yvar in MONETARY_VARS.values()
 
     # NACE1 baseline választás
-    sector_options = ["Összes ágazat"] + [NACE1_LABELS[k] for k in LABELS if k in NACE1_LABELS]
+    sector_options = ["Összes ágazat"] + [utils.NACE1_LABELS[k] for k in LABELS if k in utils.NACE1_LABELS]
+    
+    # Note: We do NOT sync Industry here because this page uses NACE1 codes, while others use NACE2.
+    # The options lists are completely different (Codes vs Names).
     sel_label = st.selectbox("Ágazat (baseline sorhoz)", sector_options, index=0)
+    
     scope_all = sel_label == "Összes ágazat"
 
     with st.expander("Egyéb beállítások"):
@@ -197,21 +210,6 @@ with col_settings:
         )
 
 # --------------------------- Segédfüggvények ---------------------------
-def apply_filter(series: pd.Series, mode: str, manual_min: float, manual_max: float) -> pd.Series:
-    """
-    Szélsőérték-kezelés Y-ra:
-    - Nincs szűrés
-    - Kézi minimum/maximum: manual_min/manual_max alapján vág
-    """
-    s = series.dropna()
-    if len(s) < 5 or mode == "Nincs szűrés":
-        return s
-
-    if mode == "Kézi minimum/maximum" and manual_min is not None and manual_max is not None:
-        return s[(s > manual_min) & (s < manual_max)]
-
-    return s
-
 def one_ttest(sub: pd.DataFrame) -> pd.Series:
     """
     sub: olyan df, amely tartalmazza yvar-t és has_grant-et.
@@ -301,11 +299,7 @@ else:
 # --------------------------- Szélsőérték kezelés (Y) – az általad használt minta ---------------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        FILTER_OPTIONS = [
-            "Nincs szűrés",
-            "Kézi minimum/maximum"
-        ]
-        tail_mode = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        tail_mode = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
 
         y_vec = df[yvar].replace([np.inf, -np.inf], np.nan).dropna()
         if tail_mode == "Kézi minimum/maximum" and not y_vec.empty:
@@ -330,7 +324,7 @@ with col_settings:
             manual_max = None
 
 # alkalmazzuk a szűrést
-y_filtered = apply_filter(df[yvar], tail_mode, manual_min, manual_max)
+y_filtered = utils.apply_filter(df[yvar], tail_mode, manual_min, manual_max)
 df = df.loc[y_filtered.index].copy()
 df[yvar] = y_filtered
 
@@ -366,7 +360,7 @@ if scope_mode == "Csak kiválasztott ágazat":
     result = baseline_row
 else:
     by_ind = df.groupby("nace1_code", observed=True).apply(one_ttest).reset_index()
-    by_ind["Ágazat"] = by_ind["nace1_code"].astype(str).map(NACE1_LABELS).fillna(by_ind["nace1_code"].astype(str))
+    by_ind["Ágazat"] = by_ind["nace1_code"].astype(str).map(utils.NACE1_LABELS).fillna(by_ind["nace1_code"].astype(str))
     by_ind = by_ind.sort_values("nace1_code")
 
     table_ind = pd.DataFrame({

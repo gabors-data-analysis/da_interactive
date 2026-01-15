@@ -3,10 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pathlib import Path
 from matplotlib.ticker import FuncFormatter, LogLocator
-from typing import List  # for lspline type hints
 import statsmodels.api as sm  # for spline regression
+import utils
 
 # Optional for LOWESS
 try:
@@ -15,129 +14,31 @@ try:
 except Exception:
     HAS_LOWESS = False
 
-color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
-
-if st.session_state["real_data"]:
-    st.set_page_config(
-        page_title="Pontdiagram — Vállalatok (HU keresztmetszet)", layout="wide"
-    )
-else:
-    st.set_page_config(
-        page_title="Pontdiagram — Vállalatok (HU keresztmetszet, szimulált)", layout="wide"
-    )
-
-@st.cache_data
-def load_cross_section(path: str = st.session_state["data_path"]) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-    need = {"nace2", "nace2_name_code"}
-    missing = need - set(df.columns)
-    if missing:
-        st.error(f"Hiányzó oszlopok az adatban: {missing}")
-        st.stop()
-    df["nace2"] = df["nace2"].astype(str)
-    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
-
-    reg_outcomes = {"sales_growth_perc", "sales_growth_log_diff"}
-    missing = reg_outcomes - set(df.columns)
-    if missing:
-        df["sales_growth_perc"] = (
-            (df["sales_lead_sim"] - df["sales_clean"]) / df["sales_clean"] * 100
-        )
-        df["sales_growth_log_diff"] = df["ln_sales_lead_sim"] - df["ln_sales"]
-    else:
-        df["sales_growth_perc"] = df["sales_growth_perc"] * 100
-
-    return df
-
-# ----------------------- Helper Functions -----------------------
-def apply_filter(
-    series: pd.Series, mode: str, low_val: float, high_val: float
-) -> pd.Series:
-    """
-    mode: one of FILTER_OPTIONS
-    - Nincs szűrés: return as-is
-    - Kézi minimum/maximum: drop outside low_val/high_val
-    """
-    s = series.dropna()
-    if len(s) < 5 or mode == "Nincs szűrés":
-        return s
-
-    if mode == "Kézi minimum/maximum":
-        if low_val is None or high_val is None:
-            return s
-        return s[(s > low_val) & (s < high_val)]
-
-    return s
-
-def lspline(series: pd.Series, knots: List[float]) -> np.ndarray:
-    """Lineáris spline dizájnmátrix (piecewise)."""
-    vector = series.values.astype(float)
-    columns = []
-    for i, knot in enumerate(knots):
-        column = np.minimum(vector, knot if i == 0 else knot - knots[i - 1])
-        columns.append(column)
-        vector = vector - column
-    columns.append(vector)
-    return np.column_stack(columns)
-
-def tail_note_txt(mode, low=None, high=None):
-    if mode == "Kézi minimum/maximum" and low is not None and high is not None:
-        return f"levágás {low:.1f}–{high:.1f}"
-    return mode
-
-cs = load_cross_section(st.session_state["data_path"])
+# ----------------------- Setup ------------------------
+col_settings, col_viz = utils.setup_page(
+    "Pontdiagram — 2019 keresztmetszet",
+    "Pontdiagram — 2019 keresztmetszet (szimulált)"
+)
+cs = utils.load_cross_section(st.session_state["data_path"])
 
 # ---- NEW: create ln_sales and ln_emp as extra variables ----
 if "sales_clean" in cs.columns and "ln_sales" not in cs.columns:
     cs["ln_sales"] = np.log(np.clip(cs["sales_clean"].astype(float), 1e-9, None))
-
 if "emp" in cs.columns and "ln_emp" not in cs.columns:
     emp_vals = pd.to_numeric(cs["emp"], errors="coerce")
     with np.errstate(divide="ignore", invalid="ignore"):
         cs["ln_emp"] = np.where(emp_vals > 0, np.log(emp_vals), np.nan)
 
-# ----------------------- UI: fejlécek ------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if st.session_state["real_data"]:
-        st.title("Pontdiagram — 2019 keresztmetszet")
-    else:
-        st.title("Pontdiagram — 2019 keresztmetszet (szimulált)")
-
-with col_right:
-    # logó a jobb felső sarokban
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-
-st.markdown(
-    """
-    Az adatok forrása **OPTEN**.  
-    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
-    """
-)
 st.markdown(
     "Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. "
     "A pénzügyi adatok **millió forintban** szerepelnek."
 )
 
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
-
 # ----------------------- Beállítások (Bal oldal) ---------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     # Ágazati opciók
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
@@ -146,54 +47,37 @@ with col_settings:
     )
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     opts = ["Összes ágazat"] + lab_df["label"].tolist()
-    sel_label = st.selectbox("Ágazat", opts, index=0)
+    
+    ind_idx = utils.get_synced_index(opts, "global_industry")
+    sel_label = st.selectbox("Ágazat", opts, index=ind_idx)
+    utils.update_synced_state("global_industry", sel_label)
 
 scope_all = sel_label == "Összes ágazat"
 
 # Változók
-if st.session_state["real_data"]:
-    MONETARY_VARS = {
-        "Értékesítés (millió Ft)": "sales_clean",
-        "Tárgyi eszközök (millió Ft)": "tanass_clean",
-        "Eszközök összesen (millió Ft)": "eszk",
-        "Személyi jellegű ráfordítások (millió Ft)": "persexp_clean",
-        "Adózás előtti eredmény (millió Ft)": "pretax",
-        "EBIT (millió Ft)": "ereduzem",
-        "Export értéke (millió Ft)": "export_value",
-        "Kötelezettségek (millió Ft)": "liabilities",
-        "Anyag jellegű ráfordítások (millió Ft)": "ranyag",
-        "Jegyzett tőke (millió Ft)": "jetok",
-        "Támogatás mértéke (millió Ft)": "grant_value",
-    }
-else:
-    MONETARY_VARS = {
-        "Értékesítés (millió Ft)": "sales_clean",
-        "Tárgyi eszközök (millió Ft)": "tanass_clean",
-        "Eszközök összesen (millió Ft)": "eszk",
-        "Személyi jellegű ráfordítások (millió Ft)": "persexp_clean",
-        "Adózás előtti eredmény (millió Ft)": "pretax",
-        "EBIT (millió Ft)": "ereduzem",
-        "Export értéke (millió Ft)": "export_value",
-        "Kötelezettségek (millió Ft)": "liabilities",
-    }
-
-NON_MONETARY_VARS = {
-    "Relatív növekedés (%)": "sales_growth_perc",
-    "Log növekedés (log-diff)": "sales_growth_log_diff",
-    "Foglalkoztatottak száma (fő)": "emp",
-    "Kor (év)": "age",
-    # --- NEW: log variables for plotting ---
-    "Log értékesítés": "ln_sales",
-    "Log foglalkoztatottak száma": "ln_emp",
+MONETARY_VARS = utils.get_monetary_vars()
+extra_vars = {
+    "Relatív növekedés (%)": "sales_growth_perc", "Log növekedés (log-diff)": "sales_growth_log_diff",
+    "Log értékesítés": "ln_sales", "Log foglalkoztatottak száma": "ln_emp"
 }
-
-var_map = {**NON_MONETARY_VARS, **MONETARY_VARS}
+var_map = {**extra_vars, **utils.NON_MONETARY_VARS, **MONETARY_VARS}
 
 available = {k: v for k, v in var_map.items() if v in cs.columns}
 
 with col_settings:
-    x_label = st.selectbox("X változó", list(available.keys()), index=2)
-    y_label = st.selectbox("Y változó", list(available.keys()), index=0)
+    avail_keys = list(available.keys())
+    
+    # Sync Secondary Continuous (X)
+    x_idx = utils.get_synced_index(avail_keys, "global_secondary_var")
+    if x_idx == 0 and len(avail_keys) > 2: x_idx = 2 # Default fallback
+    x_label = st.selectbox("X változó", avail_keys, index=x_idx)
+
+    # Sync Primary Continuous (Y)
+    y_idx = utils.get_synced_index(avail_keys, "global_primary_var")
+    y_label = st.selectbox("Y változó", avail_keys, index=y_idx)
+
+    utils.update_synced_state("global_secondary_var", x_label)
+    utils.update_synced_state("global_primary_var", y_label)
 
 xvar = available[x_label]
 yvar = available[y_label]
@@ -201,15 +85,10 @@ x_is_monetary = xvar in MONETARY_VARS.values()
 y_is_monetary = yvar in MONETARY_VARS.values()
 
 # ----------------------- Szélsőérték-kezelés -----------------------
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Kézi minimum/maximum",
-]
-
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        x_filter = st.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-        y_filter = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
 
         df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
         df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
@@ -346,8 +225,8 @@ if df.empty:
     st.error("Nincs adat a megadott feltételekhez.")
     st.stop()
 
-x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
-y = apply_filter(df[yvar], y_filter, y_low_manual, y_high_manual)
+x = utils.apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
+y = utils.apply_filter(df[yvar], y_filter, y_low_manual, y_high_manual)
 
 # közös index a két sorozatra
 idx = x.index.intersection(y.index)
@@ -396,7 +275,7 @@ with col_viz:
         alpha=alpha,
         edgecolor="white",
         linewidth=0.2,
-        color=color[0],
+        color=utils.COLORS[0],
         ax=ax,
     )
 
@@ -420,7 +299,7 @@ with col_viz:
         ax.plot(
             xs_orig,
             ys_orig,
-            color=color[1],
+            color=utils.COLORS[1],
             linewidth=2,
             alpha=0.9,
             label=f"{fit_type} illesztés",
@@ -456,7 +335,7 @@ with col_viz:
         ax.plot(
             x_orig,
             y_orig,
-            color=color[1],
+            color=utils.COLORS[1],
             linewidth=2,
             alpha=0.9,
             label="LOWESS illesztés",
@@ -474,7 +353,7 @@ with col_viz:
 
         # Kötések a transzformált térben is
         knots_tr = fwd_x(np.array(spline_knots, dtype=float))
-        X_spline = lspline(pd.Series(xx_tr, index=plot_df.index), knots_tr)
+        X_spline = utils.lspline(pd.Series(xx_tr, index=plot_df.index), knots_tr)
         X_design = sm.add_constant(X_spline)
         model = sm.OLS(yy_tr.values.astype(float), X_design.astype(float))
         res = model.fit(cov_type="HC1")
@@ -482,7 +361,7 @@ with col_viz:
         # Előrejelzés a teljes X-tartományon
         xs_orig = np.linspace(plot_df[xvar].min(), plot_df[xvar].max(), 400)
         xs_tr = fwd_x(xs_orig)
-        X_pred = lspline(pd.Series(xs_tr), knots_tr)
+        X_pred = utils.lspline(pd.Series(xs_tr), knots_tr)
         X_pred_design = sm.add_constant(X_pred)
         yhat_tr = res.predict(X_pred_design)
         yhat_orig = inv_y(yhat_tr)
@@ -490,7 +369,7 @@ with col_viz:
         ax.plot(
             xs_orig,
             yhat_orig,
-            color=color[1],
+            color=utils.COLORS[1],
             linewidth=2,
             alpha=0.9,
             label="Lineáris spline illesztés",
@@ -545,7 +424,7 @@ with col_viz:
                     y=y_m,
                     xmin=left,
                     xmax=right,
-                    colors=color[1],
+                    colors=utils.COLORS[1],
                     linewidth=3,
                     alpha=0.9,
                 )
@@ -647,8 +526,8 @@ if fit_type.startswith("Lépcsős") and len(plot_df) >= 10:
 
 # ----------------------- Összegzés --------------------------
 scope_label = sel_label
-tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
-tail_note_y = tail_note_txt(y_filter, y_low_manual, y_high_manual)
+tail_note_x = utils.tail_note_txt(x_filter, x_low_manual, x_high_manual)
+tail_note_y = utils.tail_note_txt(y_filter, y_low_manual, y_high_manual)
 bin_note = bin_scatter_choice
 
 with col_viz:

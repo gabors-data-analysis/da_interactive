@@ -4,9 +4,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pathlib import Path
 from matplotlib.ticker import FuncFormatter, LogLocator
 import textwrap
+import utils
 
 # Opcionális LOWESS
 try:
@@ -15,68 +15,21 @@ try:
 except Exception:
     HAS_LOWESS = False
 
-color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
-
-if st.session_state['real_data'] == True:
-    st.set_page_config(page_title='Két-ágazatos szórásdiagram — Vállalatok (HU keresztmetszet)', layout='wide')
-else:
-    st.set_page_config(page_title='Két-ágazatos szórásdiagram — Vállalatok (HU keresztmetszet, szimulált)', layout='wide')
-
-
-@st.cache_data
-def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-    need = {"nace2", "nace2_name_code"}
-    missing = need - set(df.columns)
-    if missing:
-        st.error(f"Hiányzó oszlopok az adatban: {missing}")
-        st.stop()
-    df["nace2"] = df["nace2"].astype(str)
-    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
-    return df
-
-cs = load_cross_section(st.session_state['data_path'])
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if st.session_state['real_data'] == True:
-        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet')
-    else:
-        st.title('Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)')
-
-with col_right:
-    # logó a jobb felső sarokban
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-
-
-st.markdown(
-    """
-    Az adatok forrása **OPTEN**.  
-    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
-    """
+# ----------------------- Setup ------------------------
+col_settings, col_viz = utils.setup_page(
+    'Két-ágazatos szórásdiagram — 2019 keresztmetszet',
+    'Két-ágazatos szórásdiagram — 2019 keresztmetszet (szimulált)'
 )
+cs = utils.load_cross_section(st.session_state['data_path'])
+
 st.markdown("Válasszon **két ágazatot**, két **változót**, és egy opcionális **illesztést**. "
             "A pénzügyi adatok **millió forintban** szerepelnek.")
-
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
 
 # ----------------------- Beállítások (Bal oldal) ---------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     # Ágazati opciók: ÖSSZES elöl, majd kódszám szerint
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
@@ -86,59 +39,39 @@ with col_settings:
     options = ["Összes ágazat"] + lab_df["label"].tolist()
 
     # Két ágazat kiválasztása
-    sel_label_A = st.selectbox("Ágazat A", options, index=0)
+    idx_a = utils.get_synced_index(options, "global_industry")
+    
+    sel_label_A = st.selectbox("Ágazat A", options, index=idx_a)
     sel_label_B = st.selectbox("Ágazat B", options, index=min(1, len(options)-1))
+    utils.update_synced_state("global_industry", sel_label_A)
 
     # Változók (pénzügyi: millió Ft)
-    if st.session_state['real_data'] == True:
-        MONETARY_VARS = {
-            'Értékesítés (millió Ft)': 'sales_clean',
-            'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-            'Eszközök összesen (millió Ft)': 'eszk',
-            'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-            'Adózás előtti eredmény (millió Ft)': 'pretax',
-            'EBIT (millió Ft)': 'ereduzem',
-            'Export értéke (millió Ft)': 'export_value',
-            'Kötelezettségek (millió Ft)': 'liabilities',
-            'Anyag jellegű ráfordítások (millió Ft)':'ranyag',
-            'Jegyzett tőke (millió Ft)':'jetok',
-            'Támogatás mértéke (millió Ft)':'grant_value'
-        }
-    else:
-        MONETARY_VARS = {
-            'Értékesítés (millió Ft)': 'sales_clean',
-            'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-            'Eszközök összesen (millió Ft)': 'eszk',
-            'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-            'Adózás előtti eredmény (millió Ft)': 'pretax',
-            'EBIT (millió Ft)': 'ereduzem',
-            'Export értéke (millió Ft)': 'export_value',
-            'Kötelezettségek (millió Ft)': 'liabilities'
-        }
-
-    NON_MONETARY_VARS = {
-        'Foglalkoztatottak száma (fő)': 'emp',
-        'Kor (év)': 'age',
-    }
-    var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
+    MONETARY_VARS = utils.get_monetary_vars()
+    var_map = {**MONETARY_VARS, **utils.NON_MONETARY_VARS}
 
     available = {k: v for k, v in var_map.items() if v in cs.columns}
-    x_label = st.selectbox("X változó", list(available.keys()), index=0)
-    y_label = st.selectbox("Y változó", list(available.keys()), index=min(4, len(available)-1))
+    avail_keys = list(available.keys())
+
+    # Sync Secondary (X)
+    x_idx = utils.get_synced_index(avail_keys, "global_secondary_var")
+    x_label = st.selectbox("X változó", avail_keys, index=x_idx)
+
+    # Sync Primary (Y)
+    y_idx = utils.get_synced_index(avail_keys, "global_primary_var")
+    if y_idx == 0 and len(avail_keys) > 4: y_idx = 4 # Default fallback
+    y_label = st.selectbox("Y változó", avail_keys, index=y_idx)
+
+    utils.update_synced_state("global_secondary_var", x_label)
+    utils.update_synced_state("global_primary_var", y_label)
 
 xvar = available[x_label]; yvar = available[y_label]
 x_is_monetary = xvar in MONETARY_VARS.values()
 y_is_monetary = yvar in MONETARY_VARS.values()
 
 # ----------------------- Szélsőérték-kezelés: 4 opció / tengely -----------------------
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Kézi minimum/maximum"
-]
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        x_filter = st.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
-        # y_filter = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
 
         # Calculate global min/max for defaults
         df_global = cs.copy()
@@ -205,22 +138,6 @@ def filter_scope(df: pd.DataFrame, label: str) -> pd.DataFrame:
         return df.copy()
     return df[df["nace2_name_code"] == label].copy()
 
-def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
-    """
-    mode ∈ FILTER_OPTIONS
-    - Nincs szűrés: változatlan
-    - Kézi minimum/maximum: low_val/high_val határokon kívüliek eldobása
-    """
-    s = series.dropna()
-    if len(s) < 5 or mode == "Nincs szűrés":
-        return s
-
-    if mode == "Kézi minimum/maximum":
-        if low_val is not None and high_val is not None:
-            return s[(s > low_val) & (s < high_val)]
-
-    return s
-
 def fwd_x(v):
     return np.log(v) if logx else v
 
@@ -233,12 +150,7 @@ def fwd_y(v):
 def inv_y(v):
     return (np.exp(v)) if logy else v
 
-def tail_note_txt(mode, low=None, high=None):
-    if mode == "Nincs szűrés":
-        return "nincs"
-    if mode == "Kézi minimum/maximum":
-        return f"kézi [{low:.2f}, {high:.2f}]"
-    return "—"
+
 
 def plot_one(scope_df: pd.DataFrame, title: str):
     # változók kiválasztása & tisztítás
@@ -258,7 +170,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         return None, None, 0
 
     # szélsőérték-kezelés (X)
-    x = apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
+    x = utils.apply_filter(df[xvar], x_filter, x_low_manual, x_high_manual)
     y = df[yvar]
     idx = x.index.intersection(y.index)
     plot_df = pd.DataFrame({xvar: x.loc[idx], yvar: y.loc[idx]})
@@ -282,7 +194,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
     fig, ax = plt.subplots()
     sns.scatterplot(
         data=scatter_df, x=xvar, y=yvar, s=size, alpha=alpha,
-        edgecolor='white', linewidth=0.2, color=color[0], ax=ax
+        edgecolor='white', linewidth=0.2, color=utils.COLORS[0], ax=ax
     )
 
     coef_text = None
@@ -299,7 +211,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         xs_tr = fwd_x(xs_orig)
         ys_tr = poly(xs_tr)
         ys_orig = inv_y(ys_tr)
-        ax.plot(xs_orig, ys_orig, color=color[1], linewidth=2, alpha=0.9, label=f"{fit_type} illesztés")
+        ax.plot(xs_orig, ys_orig, color=utils.COLORS[1], linewidth=2, alpha=0.9, label=f"{fit_type} illesztés")
 
         # Egyenlet a transzformált térben
         if deg == 1:
@@ -324,7 +236,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         z = lowess(y_tr, x_tr, frac=0.25, return_sorted=True)
         x_orig = inv_x(z[:, 0])
         y_orig = inv_y(z[:, 1])
-        ax.plot(x_orig, y_orig, color=color[1], linewidth=2, alpha=0.9, label="LOWESS illesztés")
+        ax.plot(x_orig, y_orig, color=utils.COLORS[1], linewidth=2, alpha=0.9, label="LOWESS illesztés")
 
     elif fit_type.startswith("Lépcsőzetes") and len(plot_df) >= 10:
         steps = 5 if "5" in fit_type else 20
@@ -338,7 +250,7 @@ def plot_one(scope_df: pd.DataFrame, title: str):
         bin_stats = pd.concat([bin_edges, y_mean.rename("y_mean")], axis=1).reset_index(drop=True)
         for _, r in bin_stats.iterrows():
             ax.hlines(y=r["y_mean"], xmin=r["x_min"], xmax=r["x_max"],
-                      colors=color[1], linewidth=3, alpha=0.9)
+                      colors=utils.COLORS[1], linewidth=3, alpha=0.9)
         plot_df.drop(columns="__bin", inplace=True)
 
     # címkék & formázás
@@ -413,7 +325,7 @@ with col_viz:
                 st.markdown(f"**Illesztési egyenlet:** {coefB}")
 
 # ----------------------- Lábléc összegzés -------------------
-tail_note_x = tail_note_txt(x_filter, x_low_manual, x_high_manual)
+tail_note_x = utils.tail_note_txt(x_filter, x_low_manual, x_high_manual)
 bin_note = bin_scatter_choice
 
 with col_viz:

@@ -2,183 +2,37 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from pathlib import Path
+import utils
 
-# --------------------------- Beállítások ---------------------------
-color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
+# --------------------------- Setup ---------------------------
+col_settings, col_viz = utils.setup_page(
+    'Korrelációk Ágazatonként — 2019 keresztmetszet',
+    'Korrelációk Ágazatonként — 2019 keresztmetszet (szimulált)'
+)
+cs = utils.load_cross_section(st.session_state['data_path'])
+cs = utils.add_nace1_columns(cs)
 
-real_data = st.session_state.get('real_data', False)
-
-if real_data:
-    st.set_page_config(
-        page_title='Korrelációk Ágazatonként — Vállalatok (HU keresztmetszet)',
-        layout='wide'
-    )
-else:
-    st.set_page_config(
-        page_title='Korrelációk Ágazatonként — Vállalatok (HU keresztmetszet, szimulált)',
-        layout='wide'
-    )
-
-# --------- PÉLDA / HELYKITÖLTŐ: NACE1 KÓDOK NEVEI ---------
-# Itt tudod egyenként átírni, hogyan jelenjenek meg a NACE1 csoportok a táblázatban.
-# A kulcsok a 2 jegyű tartományokat jelölik (01-09, 10-19, ...).
-NACE1_LABELS = {
-    "01-04": "NACE 01–04 (MEZŐGAZDASÁG)",
-    "05-09": "NACE 05–09 (BÁNYÁSZAT, KŐFEJTÉS)",
-    "10-34": "NACE 10–34 (FELDOLGOZÓIPAR)",
-    "35":    "NACE 35 (VILLAMOSENERGIA-, GÁZ-, GŐZELLÁTÁS)",
-    "36-39": "NACE 36–39 (VÍZELLÁTÁS)",
-    "40-44": "NACE 40–44 (ÉPÍTŐIPAR)",
-    "45-47": "NACE 45–47 (KERESKEDELEM, GÉPJÁRMŰJAVÍTÁS)",
-    "48-54": "NACE 48–54 (SZÁLLÍTÁS, RAKTÁROZÁS)",
-    "55-57": "NACE 55–57 (SZÁLLÁSHELY-SZOLGÁLTATÁS, VENDÉGLÁTÁS)",
-    "58-63": "NACE 58–63 (INFORMÁCIÓ, KOMMUNIKÁCIÓ)",
-    "64-66": "NACE 64–66 (PÉNZÜGYI, BIZTOSÍTÁSI TEVÉKENYSÉG)",
-    "67-68": "NACE 67–68 (INGATLANÜGYLETEK)",
-    "69-76": "NACE 69–76 (SZAKMAI, TUDOMÁNYOS, MŰSZAKI TEVÉKENYSÉG)",
-    "77-83": "NACE 77–83 (ADMINISZTRATÍV ÉS SZOLGÁLTATÁST TÁMOGATÓ TEVÉKENYSÉG)",
-    "84":    "NACE 84 (KÖZIGAZGATÁS, VÉDELEM; KÖTELEZŐ TÁRSADALOMBIZTOSÍTÁS)",
-    "85":    "NACE 85 (OKTATÁS)",
-    "86-89": "NACE 86–89 (HUMÁN-EGÉSZSÉGÜGYI, SZOCIÁLIS ELLÁTÁS)",
-    "90-99": "NACE 90–99 (EGYÉB)",
-}
-# Ha nem akarod mindet átírni, nyugodtan hagyd a helykitöltő szöveget,
-# vagy csak azokat módosítsd, amiket tényleg használsz.
-
-# --------------------------- Változó-készlet ---------------------------
-MONETARY_VARS_REAL = {
-    'Értékesítés (millió Ft)': 'sales_clean',
-    'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-    'Eszközök összesen (millió Ft)': 'eszk',
-    'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-    'Adózás előtti eredmény (millió Ft)': 'pretax',
-    'EBIT (millió Ft)': 'ereduzem',
-    'Export értéke (millió Ft)': 'export_value',
-    'Kötelezettségek (millió Ft)': 'liabilities',
-    'Anyag jellegű ráfordítások (millió Ft)': 'ranyag',
-    'Jegyzett tőke (millió Ft)': 'jetok',
-    'Támogatás mértéke (millió Ft)': 'grant_value'
-}
-MONETARY_VARS_SIM = {
-    'Értékesítés (millió Ft)': 'sales_clean',
-    'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-    'Eszközök összesen (millió Ft)': 'eszk',
-    'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-    'Adózás előtti eredmény (millió Ft)': 'pretax',
-    'EBIT (millió Ft)': 'ereduzem',
-    'Export értéke (millió Ft)': 'export_value',
-    'Kötelezettségek (millió Ft)': 'liabilities'
-}
-NON_MONETARY_VARS = {
-    'Foglalkoztatottak száma (fő)': 'emp',
-    'Kor (év)': 'age',
-}
 OTHER_VARS = {
     "Kapott támogatást": "has_grant",
     "Tulajdonos": "firm_owner"
 }
-
-MONETARY_VARS = MONETARY_VARS_REAL if real_data else MONETARY_VARS_SIM
-VAR_MAP = {**MONETARY_VARS, **NON_MONETARY_VARS, **OTHER_VARS}
+MONETARY_VARS = utils.get_monetary_vars()
+VAR_MAP = {**MONETARY_VARS, **utils.NON_MONETARY_VARS, **OTHER_VARS}
 
 # ---------- MANUÁLIS ALAPÉRTELMEZETT (baseline) VÁLTOZÓ ----------
 BASELINE_LABEL = 'Kapott támogatást'
 
-# --------------------------- Adatbetöltés + NACE1 szint képzése ---------------------------
-@st.cache_data
-def load_cross_section_with_nace1(path: str) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-
-    # csak a 'nace2' oszlop a kötelező (stringként kezeljük)
-    if "nace2" not in df.columns:
-        st.error("Hiányzik a `nace2` oszlop az adatban (NACE2 kódok).")
-        st.stop()
-    df["nace2"] = df["nace2"].astype(str)
-
-    # NACE2 első két számjegye -> szám
-    nace2_num = pd.to_numeric(df["nace2"].str[:2], errors="coerce")
-
-    # NACE1 tartományok (01–09, 10–19, ..., 90–99)
-    bins = [0, 4, 9, 34,35,39,44,47,54,57,63,66,68,76,83,84,85,89,99]
-    labels = [
-        "01-04",
-        "05-09",
-        "10-34",
-        "35",
-        "36-39",
-        "40-44",
-        "45-47",
-        "48-54",
-        "55-57",
-        "58-63",
-        "64-66",
-        "67-68",
-        "69-76",
-        "77-83",
-        "84",
-        "85",
-        "86-89",
-        "90-99",
-    ]
-
-    df["nace1_code"] = pd.cut(
-        nace2_num,
-        bins=bins,
-        labels=labels,
-        right=True,
-        include_lowest=True
-    )
-
-    # Szöveges név a NACE1_LABELS alapján (ha nincs megadva, marad a kód)
-    df["nace1_name"] = df["nace1_code"].astype(str).map(NACE1_LABELS).fillna(df["nace1_code"].astype(str))
-
-    return df
-
-data_path = st.session_state['data_path']
-cs = load_cross_section_with_nace1(data_path)
-
-# --------------------------- Cím & leírás ---------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if real_data:
-        st.title('Korrelációk Ágazatonként — 2019 keresztmetszet')
-    else:
-        st.title('Korrelációk Ágazatonként — 2019 keresztmetszet (szimulált)')
-
-with col_right:
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-st.markdown(
-    """
-    Az adatok forrása **OPTEN**.  
-    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
-    """
-)
 st.markdown(
     "Válasszon két **változót**. Az alkalmazás kiszámítja a **Pearson-féle korrelációt** "
     "minden **NACE1 csoportban** külön-külön, valamint **az összes ágazatra együtt**. "
     "A táblázat sorai a NACE1 csoportok, az oszlopok: korreláció és elemszám (*n*)."
 )
 
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
-
 # --------------------------- Beállítások (Bal oldal) ---------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     available = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
     if len(available) < 2:
@@ -193,10 +47,18 @@ with col_settings:
     else:
         x_index = 0
 
+    # Sync Secondary (X)
+    x_index = utils.get_synced_index(available_keys, "global_secondary_var")
     x_label = st.selectbox("Változó 1", available_keys, index=x_index)
 
     y_options = [k for k in available_keys if k != x_label]
-    y_label = st.selectbox("Változó 2", y_options, index=0)
+    
+    # Sync Primary (Y)
+    y_index = utils.get_synced_index(y_options, "global_primary_var")
+    y_label = st.selectbox("Változó 2", y_options, index=y_index)
+
+    utils.update_synced_state("global_secondary_var", x_label)
+    utils.update_synced_state("global_primary_var", y_label)
 
     xvar = available[x_label]
     yvar = available[y_label]
@@ -237,7 +99,7 @@ def corr_and_n(sub: pd.DataFrame) -> pd.Series:
 by_ind = df.groupby("nace1_code", observed=True).apply(corr_and_n).reset_index()
 
 # Hozzáadjuk a név oszlopot is (NACE1_LABELS alapján)
-by_ind["Ágazat"] = by_ind["nace1_code"].astype(str).map(NACE1_LABELS).fillna(by_ind["nace1_code"].astype(str))
+by_ind["Ágazat"] = by_ind["nace1_code"].astype(str).map(utils.NACE1_LABELS).fillna(by_ind["nace1_code"].astype(str))
 
 # Rendezés NACE1 kód sorrendben (kategória sorrend)
 by_ind = by_ind.sort_values("nace1_code")

@@ -4,11 +4,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pathlib import Path
 from matplotlib.ticker import FuncFormatter
+import utils
 
-# --------------------------- Beállítások ---------------------------
-color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
 # Változók, amelyeket se X-nek, se Y-nak nem szeretnél felajánlani
 INCLUDE_VARS = [
@@ -32,113 +30,30 @@ CATEGORICAL_VALUE_LABELS = {
     }
 }
 
-# Opció: pénzügyi változók (csak címkézéshez, formázáshoz)
-MONETARY_VARS_REAL = {
-    'Értékesítés (millió Ft)': 'sales_clean',
-    'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-    'Eszközök összesen (millió Ft)': 'eszk',
-    'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-    'Adózás előtti eredmény (millió Ft)': 'pretax',
-    'EBIT (millió Ft)': 'ereduzem',
-    'Export értéke (millió Ft)': 'export_value',
-    'Kötelezettségek (millió Ft)': 'liabilities',
-    'Anyag jellegű ráfordítások (millió Ft)': 'ranyag',
-    'Jegyzett tőke (millió Ft)': 'jetok',
-    'Támogatás mértéke (millió Ft)': 'grant_value'
-}
-MONETARY_VARS_SIM = {
-    'Értékesítés (millió Ft)': 'sales_clean',
-    'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-    'Eszközök összesen (millió Ft)': 'eszk',
-    'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-    'Adózás előtti eredmény (millió Ft)': 'pretax',
-    'EBIT (millió Ft)': 'ereduzem',
-    'Export értéke (millió Ft)': 'export_value',
-    'Kötelezettségek (millió Ft)': 'liabilities'
-}
-NON_MONETARY_VARS = {
-    'Foglalkoztatottak száma (fő)': 'emp',
-    'Kor (év)': 'age',
-}
 CATEGORY_VARS = {
     "Kapott támogatást":"has_grant",
     "Tulajdonos":"firm_owner"
 }
 
-# Szélsőérték-kezelési opciók (mint a szórásdiagramnál)
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Kézi minimum/maximum"
-]
-
-# --------------------------- Oldal beállítás ---------------------------
-real_data = st.session_state.get('real_data', False)
-if real_data:
-    st.set_page_config(page_title='Dobozdiagram — Vállalatok (HU keresztmetszet)', layout='wide')
-else:
-    st.set_page_config(page_title='Dobozdiagram — Vállalatok (HU keresztmetszet, szimulált)', layout='wide')
-
-# --------------------------- Adatbetöltés ---------------------------
-@st.cache_data
-def load_cross_section(path: str) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-    need = {"nace2", "nace2_name_code"}
-    missing = need - set(df.columns)
-    if missing:
-        st.error(f"Hiányzó oszlopok az adatban: {missing}")
-        st.stop()
-    df["nace2"] = df["nace2"].astype(str)
-    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
-    return df
-
-data_path = st.session_state['data_path']
-cs = load_cross_section(data_path)
-
-# --------------------------- Cím & leírás ---------------------------
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if st.session_state['real_data']:
-        st.title('Dobozdiagram — 2019 keresztmetszet')
-    else:
-        st.title('Dobozdiagram — 2019 keresztmetszet (szimulált)')
-
-with col_right:
-    # logó a jobb felső sarokban
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-
-
-st.markdown(
-    """
-    Az adatok forrása **OPTEN**.  
-    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
-    """
+# --------------------------- Setup ---------------------------
+col_settings, col_viz = utils.setup_page(
+    'Dobozdiagram — 2019 keresztmetszet',
+    'Dobozdiagram — 2019 keresztmetszet (szimulált)'
 )
+cs = utils.load_cross_section(st.session_state['data_path'])
+real_data = st.session_state.get('real_data', False)
+
 st.markdown(
     "Válasszon egy **kategóriás/dummy** X-változót és egy **folytonos** Y-változót. "
     "Az ábra a Y eloszlását mutatja az X kategóriái szerint, "
     "a piros pont jelzi az **átlagot**. Opcionálisan **ln(Y)** skálán is ábrázolhat."
 )
 
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
-
 # --------------------------- Beállítások (Bal oldal) ---------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     # Ágazati szűrő
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
@@ -148,15 +63,17 @@ with col_settings:
     )
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     opts = ["Összes ágazat"] + lab_df["label"].tolist()
-
-    sel_label = st.selectbox("Ágazat", opts, index=0)
+    
+    ind_idx = utils.get_synced_index(opts, "global_industry")
+    sel_label = st.selectbox("Ágazat", opts, index=ind_idx)
+    utils.update_synced_state("global_industry", sel_label)
 
 scope_all = sel_label == "Összes ágazat"
 df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
 
 # Pénzügyi változók
-MONETARY_VARS = MONETARY_VARS_REAL if real_data else MONETARY_VARS_SIM
-NAME2COL = {**MONETARY_VARS, **NON_MONETARY_VARS, **CATEGORY_VARS}
+MONETARY_VARS = utils.get_monetary_vars()
+NAME2COL = {**MONETARY_VARS, **utils.NON_MONETARY_VARS, **CATEGORY_VARS}
 COL2NAME = {v: k for k, v in NAME2COL.items()}
 
 # --------------------------- Típus-ellenőrzés ---------------------------
@@ -195,8 +112,16 @@ x_labels = [COL2NAME.get(c, c) for c in x_candidates]
 y_labels = [COL2NAME.get(c, c) for c in y_candidates]
 
 with col_settings:
-    x_label = st.selectbox("X (kategóriás/dummy)", x_labels, index=0)
-    y_label = st.selectbox("Y (folytonos)", y_labels, index=0)
+    # Sync Categorical X (Separate key!)
+    x_idx = utils.get_synced_index(x_labels, "global_categorical_var")
+    x_label = st.selectbox("X (kategóriás/dummy)", x_labels, index=x_idx)
+
+    # Sync Primary Continuous (Y)
+    y_idx = utils.get_synced_index(y_labels, "global_primary_var")
+    y_label = st.selectbox("Y (folytonos)", y_labels, index=y_idx)
+
+    utils.update_synced_state("global_categorical_var", x_label)
+    utils.update_synced_state("global_primary_var", y_label)
 
 xvar = NAME2COL.get(x_label, x_label)
 yvar = NAME2COL.get(y_label, y_label)
@@ -206,7 +131,7 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 
 with col_settings:
     with st.expander("Szélsőérték-kezelés (Y)"):
-        y_filter = st.selectbox("Y szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
 
         # Adattisztítás a határokhoz
         df = df.replace([np.inf, -np.inf], np.nan)
@@ -244,25 +169,6 @@ with col_settings:
         overlay_points = st.checkbox("Egyedi pontok megjelenítése", value=False)
 
 
-
-
-
-# --------------------------- Szélsőérték-kezelés függvény ---------------------------
-def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
-    """
-    mode: one of FILTER_OPTIONS
-    - Nincs szűrés: return as-is
-    - Kézi minimum/maximum: drop outside low_val/high_val
-    """
-    s = series.dropna()
-    if len(s) < 5 or mode == "Nincs szűrés":
-        return s
-
-    if mode == "Kézi minimum/maximum" and low_val is not None and high_val is not None:
-        return s[(s > low_val) & (s < high_val)]
-
-    return s
-
 # --------------------------- Y log feltétel + filter alkalmazása ---------------------------
 # Ha log skála, csak pozitív Y maradhat
 if use_log_y:
@@ -274,7 +180,7 @@ if df.empty:
 
 # Szélsőérték-kezelés az eredeti (skálázott) Y-on
 y_series = df[yvar].astype(float)
-y_filtered = apply_filter(y_series, y_filter, y_low_manual, y_high_manual)
+y_filtered = utils.apply_filter(y_series, y_filter, y_low_manual, y_high_manual)
 
 # Szűrt df (index-alapú szinkronizálás)
 df = df.loc[y_filtered.index].copy()
@@ -317,7 +223,7 @@ with col_viz:
         x="__x_display__", y="__y__",
         order=order,
         showfliers=not hide_outliers,
-        width=0.6, color=color[0],
+        width=0.6, color=utils.COLORS[0],
         ax=ax
     )
 

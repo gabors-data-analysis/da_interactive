@@ -2,70 +2,25 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
 from matplotlib.ticker import FuncFormatter
+import utils
 
-color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
-
-# ----------------------------- Page config ------------------------------
-if st.session_state["real_data"]:
-    st.set_page_config(page_title="Eloszlások vizualizálása", layout="wide")
-else:
-    st.set_page_config(
-        page_title="Eloszlások vizualizálása — Vállalatok (HU, szimulált)", layout="wide"
-    )
-
-@st.cache_data
-def load_cross_section(path: str = st.session_state["data_path"]) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-    if "nace2_name_code" not in df.columns:
-        st.error("Hiányzik a `nace2_name_code` oszlop az adatból.")
-        st.stop()
-    return df
-
-cs = load_cross_section()
-
-# ----------------------------- Header ------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if st.session_state["real_data"]:
-        st.title("Eloszlások vizualizálása")
-    else:
-        st.title("Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)")
-
-with col_right:
-    # logó a jobb felső sarokban
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-
-st.markdown(
-    """
-    Az adatok forrása **OPTEN**.  
-    Minden ábra és adat oktatási céllal készült és tájékoztató jellegű.  
-    """
+# ----------------------------- Setup ------------------------------
+col_settings, col_viz = utils.setup_page(
+    "Eloszlások vizualizálása",
+    "Eloszlások vizualizálása — 2019 keresztmetszet (szimulált)"
 )
+cs = utils.load_cross_section(st.session_state["data_path"])
+
 st.markdown(
     "Válasszon egy **ágazatot** és egy **változót** a megjelenítéshez. A pénzügyi adatok **millió forintban** szerepelnek."
 )
 
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
-
 # ----------------------------- Sidebar -----------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     # Build industry options: ALL first, then sorted by numeric code in the label
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
@@ -76,40 +31,14 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
 
     labels = ["Összes ágazat"] + lab_df["label"].tolist()
-    def_idx = 1 if len(labels) > 1 else 0
+    def_idx = utils.get_synced_index(labels, "global_industry") if sync_on else (1 if len(labels) > 1 else 0)
+    
     selected_label = st.selectbox("Ágazat", labels, index=def_idx)
+    utils.update_synced_state("global_industry", selected_label)
 
 # Variable selection — monetary variables will be displayed in million HUF
-if st.session_state["real_data"]:
-    MONETARY_VARS = {
-        "Értékesítés (millió Ft)": "sales_clean",
-        "Tárgyi eszközök (millió Ft)": "tanass_clean",
-        "Eszközök összesen (millió Ft)": "eszk",
-        "Személyi jellegű ráfordítások (millió Ft)": "persexp_clean",
-        "Adózás előtti eredmény (millió Ft)": "pretax",
-        "EBIT (millió Ft)": "ereduzem",
-        "Export értéke (millió Ft)": "export_value",
-        "Kötelezettségek (millió Ft)": "liabilities",
-        "Anyag jellegű ráfordítások (millió Ft)": "ranyag",
-        "Jegyzett tőke (millió Ft)": "jetok",
-        "Támogatás mértéke (millió Ft)": "grant_value",
-    }
-else:
-    MONETARY_VARS = {
-        "Értékesítés (millió Ft)": "sales_clean",
-        "Tárgyi eszközök (millió Ft)": "tanass_clean",
-        "Eszközök összesen (millió Ft)": "eszk",
-        "Személyi jellegű ráfordítások (millió Ft)": "persexp_clean",
-        "Adózás előtti eredmény (millió Ft)": "pretax",
-        "EBIT (millió Ft)": "ereduzem",
-        "Export értéke (millió Ft)": "export_value",
-        "Kötelezettségek (millió Ft)": "liabilities",
-    }
-NON_MONETARY_VARS = {
-    "Foglalkoztatottak száma (fő)": "emp",
-    "Kor (év)": "age",
-}
-var_map = {**MONETARY_VARS, **NON_MONETARY_VARS}
+MONETARY_VARS = utils.get_monetary_vars()
+var_map = {**MONETARY_VARS, **utils.NON_MONETARY_VARS}
 
 available = [k for k, v in var_map.items() if v in cs.columns]
 if not available:
@@ -117,7 +46,10 @@ if not available:
     st.stop()
 
 with col_settings:
-    var_label = st.selectbox("Megjelenítendő változó", available, index=0)
+    # Sync Primary Continuous Var
+    var_idx = utils.get_synced_index(available, "global_primary_var")
+    var_label = st.selectbox("Megjelenítendő változó", available, index=var_idx)
+    utils.update_synced_state("global_primary_var", var_label)
 var = var_map[var_label]
 is_monetary = var in MONETARY_VARS.values()
 
@@ -142,8 +74,7 @@ if x.empty:
 # -------------------------- Tail handling (mutually exclusive) --------------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        FILTER_OPTIONS = ["Nincs szűrés", "Kézi minimum/maximum"]
-        tail_mode = st.selectbox("X szélsőérték-kezelése", FILTER_OPTIONS, index=0)
+        tail_mode = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
 
         # Manual min/max controls (shown only when selected)
         if tail_mode == "Kézi minimum/maximum":
@@ -221,7 +152,7 @@ with col_viz:
         counts_masked,
         width=widths,
         align="edge",
-        color=color[0],
+        color=utils.COLORS[0],
         edgecolor="white",
         linewidth=0.5,
     )

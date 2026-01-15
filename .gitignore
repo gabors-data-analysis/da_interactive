@@ -4,3 +4,4 @@
 .Ruserdata
 *.ipynb
 venv
+__pycache__/

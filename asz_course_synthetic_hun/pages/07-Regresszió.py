@@ -1,97 +1,26 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from pathlib import Path
 import statsmodels.api as sm
-from typing import List  # <-- added for lspline type hints
+import utils
 
-# ------------------------------------------------------
-# Beállítások
-# ------------------------------------------------------
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-col_left, col_right = st.columns([4, 1])
-
-with col_left:
-    if st.session_state['real_data'] == True:
-        st.set_page_config(page_title="Növekedési regressziók — Vállalatok", layout="wide")
-        st.title("Növekedési regressziók — 2019 keresztmetszet")
-    else:
-        st.set_page_config(page_title="Növekedési regressziók — Vállalatok (szimulált)", layout="wide")
-        st.title("Növekedési regressziók — 2019 keresztmetszet (szimulált)")
-with col_right:
-    logo_path = BASE_DIR / "images/logo_opten_horizontal_black.png"
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-
-
-@st.cache_data
-def load_cross_section(path: str = st.session_state['data_path']) -> pd.DataFrame:
-    p = Path(path)
-    if not p.exists():
-        st.error(f"Fájl nem található: {p}")
-        st.stop()
-    df = pd.read_parquet(p).copy()
-    need = {"nace2", "nace2_name_code"}
-    missing = need - set(df.columns)
-    if missing:
-        st.error(f"Hiányzó oszlopok az adatban: {missing}")
-        st.stop()
-    df["nace2"] = df["nace2"].astype(str)
-    df["nace2_name_code"] = df["nace2_name_code"].astype(str)
-
-    reg_outcomes = {"sales_growth_perc","sales_growth_log_diff"}
-    missing = reg_outcomes - set(df.columns)
-    if missing:
-        df["sales_growth_perc"] = (df["sales_lead_sim"] - df["sales_clean"]) / df["sales_clean"] * 100
-        df["sales_growth_log_diff"] = df["ln_sales_lead_sim"] - df["ln_sales"]
-    
-    else:
-        df["sales_growth_perc"] = df["sales_growth_perc"] * 100
-
-    if "sales_clean" in df.columns:
-        df["ln_sales"] = np.log(np.clip(df["sales_clean"].astype(float), 1e-9, None))
-
-    return df
-
-
-df = load_cross_section(st.session_state['data_path'])
+# ----------------------- Setup ------------------------
+col_settings, col_viz = utils.setup_page(
+    "Növekedési regressziók — 2019 keresztmetszet",
+    "Növekedési regressziók — 2019 keresztmetszet (szimulált)"
+)
+df = utils.load_cross_section(st.session_state['data_path'])
+if "sales_clean" in df.columns:
+    df["ln_sales"] = np.log(np.clip(df["sales_clean"].astype(float), 1e-9, None))
 
 # ------------------------------------------------------
 # Változó-label szótárak
 # ------------------------------------------------------
-if st.session_state['real_data'] == True:
-    MONETARY_VARS = {
-        'Értékesítés (millió Ft)': 'sales_clean',
-        'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-        'Eszközök összesen (millió Ft)': 'eszk',
-        'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-        'Adózás előtti eredmény (millió Ft)': 'pretax',
-        'EBIT (millió Ft)': 'ereduzem',
-        'Export értéke (millió Ft)': 'export_value',
-        'Kötelezettségek (millió Ft)': 'liabilities',
-        'Anyag jellegű ráfordítások (millió Ft)': 'ranyag',
-        'Jegyzett tőke (millió Ft)': 'jetok',
-        'Támogatás mértéke (millió Ft)': 'grant_value'
-    }
-else:
-    MONETARY_VARS = {
-        'Értékesítés (millió Ft)': 'sales_clean',
-        'Tárgyi eszközök (millió Ft)': 'tanass_clean',
-        'Eszközök összesen (millió Ft)': 'eszk',
-        'Személyi jellegű ráfordítások (millió Ft)': 'persexp_clean',
-        'Adózás előtti eredmény (millió Ft)': 'pretax',
-        'EBIT (millió Ft)': 'ereduzem',
-        'Export értéke (millió Ft)': 'export_value',
-        'Kötelezettségek (millió Ft)': 'liabilities'
-    }
-
-NON_MONETARY_VARS = {
-    "Relatív növekedés (%)": "sales_growth_perc",
-    "Log növekedés (log-diff)": "sales_growth_log_diff",
-    "Foglalkoztatottak száma (fő)": "emp",
-    "Kor (év)": "age",
+MONETARY_VARS = utils.get_monetary_vars()
+extra_vars = {
+    "Relatív növekedés (%)": "sales_growth_perc", "Log növekedés (log-diff)": "sales_growth_log_diff"
 }
+NON_MONETARY_VARS = {**extra_vars, **utils.NON_MONETARY_VARS}
 
 VAR_LABELS_BY_COL = {}
 for label, col in {**MONETARY_VARS, **NON_MONETARY_VARS}.items():
@@ -173,19 +102,13 @@ Lehetséges kimenetek:
 """
 )
 
-col_settings, col_sep, col_viz = st.columns([4, 2, 12])
-
-with col_sep:
-    st.markdown(
-        '<div style="border-left: 1px solid #e0e0e0; height: 100vh; margin: 0 auto;"></div>',
-        unsafe_allow_html=True,
-    )
-
 # ------------------------------------------------------
 # Beállítások (Bal oldal)
 # ------------------------------------------------------
 with col_settings:
     st.header("Beállítások")
+
+    sync_on = utils.render_sync_option(st)
 
     lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
@@ -194,8 +117,11 @@ with col_settings:
     )
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
+    
+    ind_idx = utils.get_synced_index(industry_opts, "global_industry")
+    sel_industry = st.selectbox("Ágazat", industry_opts, index=ind_idx)
+    utils.update_synced_state("global_industry", sel_industry)
 
-    sel_industry = st.selectbox("Ágazat", industry_opts, index=0)
 if sel_industry == "Összes ágazat":
     d = df.copy()
 else:
@@ -246,7 +172,10 @@ if "ln_sales" in d.columns:
 available = list(available) + extra_y_labels
 
 with col_settings:
-    outcome_choice = st.selectbox("Kimenet", available, index=0)
+    # Sync Primary (Y) -> Outcome
+    out_idx = utils.get_synced_index(available, "global_primary_var")
+    outcome_choice = st.selectbox("Kimenet", available, index=out_idx)
+    utils.update_synced_state("global_primary_var", outcome_choice)
 y_col = label_to_col[outcome_choice]
 
 # ------------------------------------------------------
@@ -433,15 +362,10 @@ with col_settings:
 # ------------------------------------------------------
 # Szélsőérték-kezelés (Y + választható folytonos X-ek)
 # ------------------------------------------------------
-FILTER_OPTIONS = [
-    "Nincs szűrés",
-    "Kézi minimum/maximum"
-]
-
 with col_settings:
     with st.expander("Szélsőérték-kezelés (Y és X-ek)", expanded=False):
         # --- Y filter ---
-        y_filter = st.selectbox("**Y szélsőérték-kezelése**", FILTER_OPTIONS, index=0)
+        y_filter = st.selectbox("**Y szélsőérték-kezelése**", utils.FILTER_OPTIONS, index=0)
 
         if y_filter == "Kézi minimum/maximum":
             st.markdown("**Y kézi határok (a megjelenített egységben)**")
@@ -483,7 +407,7 @@ with col_settings:
             col = num_label_to_col[lbl]
             mode = st.selectbox(
                 f"{lbl} szélsőérték-kezelése",
-                FILTER_OPTIONS,
+                utils.FILTER_OPTIONS,
                 index=0,
                 key=f"x_filter_mode__{col}"
             )
@@ -521,51 +445,6 @@ if "y_filter" not in locals():
 if "x_filters" not in locals():
     x_filters = {}
 
-def apply_filter(series: pd.Series, mode: str, low_val: float, high_val: float) -> pd.Series:
-    s = series.replace([np.inf, -np.inf], np.nan).dropna()
-    if len(s) < 5 or mode == "Nincs szűrés":
-        return s
-
-    if mode == "Kézi minimum/maximum":
-        if low_val is None or high_val is None:
-            return s
-        return s[(s > low_val) & (s < high_val)]
-
-    return s
-
-# ------------------------------------------------------
-# Linear spline helper: piecewise design matrix (lspline)
-# ------------------------------------------------------
-def lspline(series: pd.Series, knots: List[float]) -> np.ndarray:
-    """
-    Generate a linear spline design matrix for the input series based on knots.
-    Piecewise form: coefficients correspond to segment-specific slopes.
-
-    Parameters
-    ----------
-    series : pd.Series
-        The input series to generate the design matrix for.
-    knots : List[float]
-        The list of knots to use for the linear spline.
-
-    Returns
-    -------
-    np.ndarray
-        The design matrix for the linear spline with shape (n, len(knots)+1).
-    """
-    vector = series.values.astype(float)
-    columns = []
-
-    for i, knot in enumerate(knots):
-        column = np.minimum(vector, knot if i == 0 else knot - knots[i - 1])
-        columns.append(column)
-        vector = vector - column
-
-    # Add the remainder as the last column
-    columns.append(vector)
-
-    return np.column_stack(columns)
-
 # ------------------------------------------------------
 # Munkatábla + szűrés
 # ------------------------------------------------------
@@ -579,7 +458,7 @@ if dwork.empty:
     st.error("Nem maradt megfigyelés a kimenet/magyarázók hiányzóinak eldobása után.")
     st.stop()
 
-y_filtered = apply_filter(dwork["__y__"], y_filter, y_low_manual, y_high_manual)
+y_filtered = utils.apply_filter(dwork["__y__"], y_filter, y_low_manual, y_high_manual)
 if y_filtered.empty:
     st.error("A kimenet (Y) szélsőérték-kezelése után nem maradt megfigyelés.")
     st.stop()
@@ -589,7 +468,7 @@ for col, (mode, low_val, high_val) in x_filters.items():
     if col not in dwork.columns:
         continue
     x_series = pd.to_numeric(dwork.loc[idx_keep, col], errors="coerce")
-    x_filtered = apply_filter(x_series, mode, low_val, high_val)
+    x_filtered = utils.apply_filter(x_series, mode, low_val, high_val)
     if x_filtered.empty:
         st.error(f"A(z) `{col_to_label(col)}` változó szélsőérték-kezelése után nem maradt megfigyelés.")
         st.stop()
@@ -620,7 +499,7 @@ def build_design_matrix(dwork: pd.DataFrame,
         knots = spline_specs.get(v, [])
         if knots:
             # Proper piecewise linear spline expansion using lspline
-            spline_mat = lspline(x_raw, knots)  # shape: (n, len(knots)+1)
+            spline_mat = utils.lspline(x_raw, knots)  # shape: (n, len(knots)+1)
             col_names = [f"{v}_spline_{i+1}" for i in range(spline_mat.shape[1])]
             spline_df = pd.DataFrame(spline_mat, index=dwork.index, columns=col_names)
             X_parts.append(spline_df)
@@ -673,7 +552,8 @@ if (res1 is None) and (res2 is None):
 # ------------------------------------------------------
 # Eredmények táblázata – CPS-stílus, keskeny, középre igazítva
 # ------------------------------------------------------
-st.subheader("Regressziós eredmények (Modell 1 vs. Modell 2)")
+with col_viz:
+    st.subheader("Regressziós eredmények")
 
 def sig_stars(p):
     if p < 0.01:
