@@ -61,7 +61,8 @@ def repeat_cleaning(df, error_message=None):
                             "export":"export_value",
                             "rlk":"liabilities",
                             "received_grant":"has_grant",
-                            "firm_exit":"exit"})
+                            "firm_exit":"exit",
+                            "received_grant_2020":"has_grant_2020"})
         
         df["ln_sales"] = np.log(np.clip(df["sales_clean"].astype(float), 1e-9, None))
 
