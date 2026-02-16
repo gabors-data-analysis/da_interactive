@@ -14,6 +14,13 @@ try:
 except Exception:
     HAS_LOWESS = False
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # ----------------------- Setup ------------------------
 col_settings, col_viz = utils.setup_page(
     "Pontdiagram — 2019 keresztmetszet",
@@ -87,8 +94,13 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 # ----------------------- Szélsőérték-kezelés -----------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
-        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        saved_xf = persist("p02_xfilter", "Nincs szűrés (összes érték)")
+        xf_idx = utils.FILTER_OPTIONS.index(saved_xf) if saved_xf in utils.FILTER_OPTIONS else 0
+        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=xf_idx, key="_p02_xfilter", on_change=save, args=("p02_xfilter",))
+        
+        saved_yf = persist("p02_yfilter", "Nincs szűrés (összes érték)")
+        yf_idx = utils.FILTER_OPTIONS.index(saved_yf) if saved_yf in utils.FILTER_OPTIONS else 0
+        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=yf_idx, key="_p02_yfilter", on_change=save, args=("p02_yfilter",))
 
         df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
         df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[xvar, yvar])
@@ -155,24 +167,23 @@ with col_settings:
 with col_settings:
     with st.expander("Ábra beállítások"):
         BIN_SCATTER_OPTIONS = ["Eredeti", "5 bin", "10 bin", "20 bin", "100 bin"]
-        bin_scatter_choice = st.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
+        saved_bin = persist("p02_bin", "Eredeti")
+        bin_idx = BIN_SCATTER_OPTIONS.index(saved_bin) if saved_bin in BIN_SCATTER_OPTIONS else 0
+        bin_scatter_choice = st.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=bin_idx, key="_p02_bin", on_change=save, args=("p02_bin",))
         bin_scatter_map = {"5 bin": 5, "10 bin": 10, "20 bin": 20, "100 bin": 100}
         n_bins = bin_scatter_map.get(bin_scatter_choice, None)
         use_bin_scatter = n_bins is not None
 
+        fit_opts = [
+            "Nincs", "Lineáris", "Kvadratikus", "Köbös",
+            "Lépcsős (5 bin)", "Lépcsős (20 bin)", "LOWESS", "Lineáris spline"
+        ]
+        saved_fit = persist("p02_fit", "Nincs")
+        fit_idx = fit_opts.index(saved_fit) if saved_fit in fit_opts else 0
         fit_type = st.selectbox(
             "Illesztés rárajzolása (eredeti adaton, nem a bin-eken)",
-            [
-                "Nincs",
-                "Lineáris",
-                "Kvadratikus",
-                "Köbös",
-                "Lépcsős (5 bin)",
-                "Lépcsős (20 bin)",
-                "LOWESS",
-                "Lineáris spline",
-            ],
-            index=0,
+            fit_opts,
+            index=fit_idx, key="_p02_fit", on_change=save, args=("p02_fit",)
         )
         if fit_type == "LOWESS" and not HAS_LOWESS:
             st.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
@@ -203,15 +214,15 @@ with col_settings:
 with col_settings:
     with st.expander("Megjelenítés és Skála"):
         st.markdown("#### Skála")
-        logx = st.checkbox("Logaritmikus skála X", value=False)
-        logy = st.checkbox("Logaritmikus skála Y", value=False)
+        logx = st.checkbox("Logaritmikus skála X", value=persist("p02_logx", False), key="_p02_logx", on_change=save, args=("p02_logx",))
+        logy = st.checkbox("Logaritmikus skála Y", value=persist("p02_logy", False), key="_p02_logy", on_change=save, args=("p02_logy",))
 
         st.markdown("#### Megjelenítés")
-        fig_width = st.slider("Ábra szélessége", 4.0, 16.0, 8.0, 0.5)
-        fig_height = st.slider("Ábra magassága", 2.0, 8.0, 4.0, 0.5)
+        fig_width = st.slider("Ábra szélessége", 4.0, 16.0, persist("p02_w", 8.0), 0.5, key="_p02_w", on_change=save, args=("p02_w",))
+        fig_height = st.slider("Ábra magassága", 2.0, 8.0, persist("p02_h", 4.0), 0.5, key="_p02_h", on_change=save, args=("p02_h",))
         # Plot megjelenés
-        alpha = st.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
-        size = st.slider("Pontméret", 5, 100, 20, 1)
+        alpha = st.slider("Pontok átlátszósága", 0.1, 1.0, persist("p02_alpha", 0.5), 0.05, key="_p02_alpha", on_change=save, args=("p02_alpha",))
+        size = st.slider("Pontméret", 5, 100, persist("p02_size", 20), 1, key="_p02_size", on_change=save, args=("p02_size",))
 
 # ----------------------- Szűrés és előkészítés ---------------------
 

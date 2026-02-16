@@ -4,6 +4,13 @@ import pandas as pd
 import numpy as np
 import utils
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # --------------------------- Setup ---------------------------
 col_settings, col_viz = utils.setup_page(
     'Korrelációk Ágazatonként — 2019 keresztmetszet',
@@ -64,10 +71,11 @@ with col_settings:
     yvar = available[y_label]
 
     with st.expander("Megjelenítés"):
+        sort_opts = ["Ágazat szerint", "Korreláció szerint (csökkenő)"]
         sort_choice = st.radio(
             "Rendezés a táblázatban",
-            ["Ágazat szerint", "Korreláció szerint (csökkenő)"],
-            index=0
+            sort_opts,
+            index=sort_opts.index(persist("p05_sort", "Ágazat szerint")), key="_p05_sort", on_change=save, args=("p05_sort",)
         )
 
 # --------------------------- Előkészítés ---------------------------

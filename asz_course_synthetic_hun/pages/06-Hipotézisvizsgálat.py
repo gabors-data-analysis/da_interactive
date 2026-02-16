@@ -12,6 +12,13 @@ try:
 except Exception:
     HAS_SCIPY = False
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 color = ["#3a5e8c", "#10a53d", "#541352", "#ffcf20", "#2f9aa0"]
 
 # --------------------------- Oldal beállítás ---------------------------
@@ -195,18 +202,22 @@ with col_settings:
     
     # Note: We do NOT sync Industry here because this page uses NACE1 codes, while others use NACE2.
     # The options lists are completely different (Codes vs Names).
-    sel_label = st.selectbox("Ágazat (baseline sorhoz)", sector_options, index=0)
+    saved_base = persist("p06_base", "Összes ágazat")
+    base_idx = sector_options.index(saved_base) if saved_base in sector_options else 0
+    sel_label = st.selectbox("Ágazat (baseline sorhoz)", sector_options, index=base_idx, key="_p06_base", on_change=save, args=("p06_base",))
     
     scope_all = sel_label == "Összes ágazat"
 
     with st.expander("Egyéb beállítások"):
         # Log skála (ln)
-        use_log_y = st.checkbox("Y log skála (ln)", value=False)
+        use_log_y = st.checkbox("Y log skála (ln)", value=persist("p06_log", False), key="_p06_log", on_change=save, args=("p06_log",))
         # Eredmény típusa
+        scope_opts = ["Csak kiválasztott ágazat", "Minden ágazat külön (plusz összes)"]
         scope_mode = st.radio(
             "Eredmény típusa",
-            ["Csak kiválasztott ágazat", "Minden ágazat külön (plusz összes)"],
-            index=0
+            scope_opts,
+            index=scope_opts.index(persist("p06_scope", "Csak kiválasztott ágazat")),
+            key="_p06_scope", on_change=save, args=("p06_scope",)
         )
 
 # --------------------------- Segédfüggvények ---------------------------
@@ -299,7 +310,9 @@ else:
 # --------------------------- Szélsőérték kezelés (Y) – az általad használt minta ---------------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        tail_mode = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        saved_tail = persist("p06_tail", "Nincs szűrés (összes érték)")
+        tail_idx = utils.FILTER_OPTIONS.index(saved_tail) if saved_tail in utils.FILTER_OPTIONS else 0
+        tail_mode = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=tail_idx, key="_p06_tail", on_change=save, args=("p06_tail",))
 
         y_vec = df[yvar].replace([np.inf, -np.inf], np.nan).dropna()
         if tail_mode == "Kézi minimum/maximum" and not y_vec.empty:

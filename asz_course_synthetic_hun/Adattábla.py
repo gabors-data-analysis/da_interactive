@@ -22,8 +22,8 @@ BASE_DIR = Path(__file__).resolve().parent
 st.session_state["data_path"] = BASE_DIR / "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
 
 # Just for testing: 
-# st.session_state["data_path"] ="C:/Users/Barabás Dániel/work/balance_cross_section2019_to_export.parquet"
-st.session_state["ts_data"] = BASE_DIR / "data/synthetic/grant_time_series.csv"
+# st.session_state["data_path"] ="C:/Users/Barabás Dániel/work/balance_cross_section2019_to_export_20260129.parquet"
+st.session_state["ts_data"] = BASE_DIR / "data/grant_ts.parquet"
 
 
 

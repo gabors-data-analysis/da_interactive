@@ -4,6 +4,13 @@ import numpy as np
 import statsmodels.api as sm
 import utils
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # ----------------------- Setup ------------------------
 col_settings, col_viz = utils.setup_page(
     "Növekedési regressziók — 2019 keresztmetszet",
@@ -264,12 +271,14 @@ with col_settings:
         cont_labels_1 = st.multiselect(
             "Folytonos magyarázó változók – Modell 1",
             options=sorted(num_label_to_col.keys()),
-            key="cont_m1"
+            default=persist("p07_cont_m1", []),
+            key="_p07_cont_m1", on_change=save, args=("p07_cont_m1",)
         )
         cat_labels_1 = st.multiselect(
             "Kategorikus magyarázó változók – Modell 1",
             options=sorted(cat_label_to_col.keys()),
-            key="cat_m1"
+            default=persist("p07_cat_m1", []),
+            key="_p07_cat_m1", on_change=save, args=("p07_cat_m1",)
         )
 cont_vars_1 = [num_label_to_col[l] for l in cont_labels_1]
 cat_vars_1 = [cat_label_to_col[l] for l in cat_labels_1]
@@ -279,12 +288,14 @@ with col_settings:
         cont_labels_2 = st.multiselect(
             "Folytonos magyarázó változók – Modell 2",
             options=sorted(num_label_to_col.keys()),
-            key="cont_m2"
+            default=persist("p07_cont_m2", []),
+            key="_p07_cont_m2", on_change=save, args=("p07_cont_m2",)
         )
         cat_labels_2 = st.multiselect(
             "Kategorikus magyarázó változók — Modell 2",
             options=sorted(cat_label_to_col.keys()),
-            key="cat_m2"
+            default=persist("p07_cat_m2", []),
+            key="_p07_cat_m2", on_change=save, args=("p07_cat_m2",)
         )
 cont_vars_2 = [num_label_to_col[l] for l in cont_labels_2]
 cat_vars_2 = [cat_label_to_col[l] for l in cat_labels_2]

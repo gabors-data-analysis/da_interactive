@@ -35,6 +35,13 @@ CATEGORY_VARS = {
     "Tulajdonos":"firm_owner"
 }
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # --------------------------- Setup ---------------------------
 col_settings, col_viz = utils.setup_page(
     'Dobozdiagram — 2019 keresztmetszet',
@@ -131,7 +138,9 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 
 with col_settings:
     with st.expander("Szélsőérték-kezelés (Y)"):
-        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        saved_yf = persist("p04_yfilter", "Nincs szűrés (összes érték)")
+        yf_idx = utils.FILTER_OPTIONS.index(saved_yf) if saved_yf in utils.FILTER_OPTIONS else 0
+        y_filter = st.selectbox("Y szélsőérték-kezelése", utils.FILTER_OPTIONS, index=yf_idx, key="_p04_yfilter", on_change=save, args=("p04_yfilter",))
 
         # Adattisztítás a határokhoz
         df = df.replace([np.inf, -np.inf], np.nan)
@@ -164,9 +173,9 @@ with col_settings:
 
     # ln(Y) + további opciók
     with st.expander("Megjelenítés és Skála"):
-        use_log_y = st.checkbox("Y log skála (ln)", value=False)
-        hide_outliers = st.checkbox("Kiugrók elrejtése a dobozábrán", value=False)
-        overlay_points = st.checkbox("Egyedi pontok megjelenítése", value=False)
+        use_log_y = st.checkbox("Y log skála (ln)", value=persist("p04_logy", False), key="_p04_logy", on_change=save, args=("p04_logy",))
+        hide_outliers = st.checkbox("Kiugrók elrejtése a dobozábrán", value=persist("p04_hide", False), key="_p04_hide", on_change=save, args=("p04_hide",))
+        overlay_points = st.checkbox("Egyedi pontok megjelenítése", value=persist("p04_points", False), key="_p04_points", on_change=save, args=("p04_points",))
 
 
 # --------------------------- Y log feltétel + filter alkalmazása ---------------------------

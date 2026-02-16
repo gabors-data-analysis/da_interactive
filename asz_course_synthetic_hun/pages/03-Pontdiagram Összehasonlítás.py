@@ -15,6 +15,13 @@ try:
 except Exception:
     HAS_LOWESS = False
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # ----------------------- Setup ------------------------
 col_settings, col_viz = utils.setup_page(
     'Két-ágazatos szórásdiagram — 2019 keresztmetszet',
@@ -71,7 +78,9 @@ y_is_monetary = yvar in MONETARY_VARS.values()
 # ----------------------- Szélsőérték-kezelés: 4 opció / tengely -----------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        saved_xf = persist("p03_xfilter", "Nincs szűrés (összes érték)")
+        xf_idx = utils.FILTER_OPTIONS.index(saved_xf) if saved_xf in utils.FILTER_OPTIONS else 0
+        x_filter = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=xf_idx, key="_p03_xfilter", on_change=save, args=("p03_xfilter",))
 
         # Calculate global min/max for defaults
         df_global = cs.copy()
@@ -103,7 +112,9 @@ with col_settings:
             "20 bin",
             "100 bin"
         ]
-        bin_scatter_choice = st.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=0)
+        saved_bin = persist("p03_bin", "Eredeti")
+        bin_idx = BIN_SCATTER_OPTIONS.index(saved_bin) if saved_bin in BIN_SCATTER_OPTIONS else 0
+        bin_scatter_choice = st.selectbox("Pontdiagram típusa", BIN_SCATTER_OPTIONS, index=bin_idx, key="_p03_bin", on_change=save, args=("p03_bin",))
         bin_scatter_map = {
             "5 bin": 5,
             "10 bin": 10,
@@ -114,23 +125,26 @@ with col_settings:
         use_bin_scatter = n_bins is not None
 
         # Illesztés típusa
+        fit_opts = ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsőzetes (5 bin)", "Lépcsőzetes (20 bin)"]
+        saved_fit = persist("p03_fit", "Nincs")
+        fit_idx = fit_opts.index(saved_fit) if saved_fit in fit_opts else 0
         fit_type = st.selectbox(
             "Illesztés rárajzolása",
-            ["Nincs", "Lineáris", "Kvadratikus", "Köbös", "LOWESS", "Lépcsőzetes (5 bin)", "Lépcsőzetes (20 bin)"],
-            index=0
+            fit_opts,
+            index=fit_idx, key="_p03_fit", on_change=save, args=("p03_fit",)
         )
         if fit_type == "LOWESS" and not HAS_LOWESS:
             st.warning("A statsmodels LOWESS nem elérhető; válasszon másik illesztést.")
 
         # Ábra megjelenés
         st.markdown("#### Megjelenítés")
-        alpha = st.slider("Pontok átlátszósága", 0.1, 1.0, 0.5, 0.05)
-        size  = st.slider("Pontméret", 5, 100, 20, 1)
+        alpha = st.slider("Pontok átlátszósága", 0.1, 1.0, persist("p03_alpha", 0.5), 0.05, key="_p03_alpha", on_change=save, args=("p03_alpha",))
+        size  = st.slider("Pontméret", 5, 100, persist("p03_size", 20), 1, key="_p03_size", on_change=save, args=("p03_size",))
 
         # Log skálák
         st.markdown("#### Skála")
-        logx = st.checkbox("Logaritmikus skála X", value=False)
-        logy = st.checkbox("Logaritmikus skála Y", value=False)
+        logx = st.checkbox("Logaritmikus skála X", value=persist("p03_logx", False), key="_p03_logx", on_change=save, args=("p03_logx",))
+        logy = st.checkbox("Logaritmikus skála Y", value=persist("p03_logy", False), key="_p03_logy", on_change=save, args=("p03_logy",))
 
 # ----------------------- Segédfüggvények ---------------------------
 def filter_scope(df: pd.DataFrame, label: str) -> pd.DataFrame:

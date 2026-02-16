@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import utils
 
+# --- State Persistence Helper ---
+def persist(key, default):
+    if key not in st.session_state: st.session_state[key] = default
+    return st.session_state[key]
+def save(key):
+    st.session_state[key] = st.session_state[f"_{key}"]
+
 # ----------------------------- Setup ------------------------------
 col_settings, col_viz = utils.setup_page(
     "Eloszlások vizualizálása",
@@ -74,7 +81,9 @@ if x.empty:
 # -------------------------- Tail handling (mutually exclusive) --------------------------
 with col_settings:
     with st.expander("Szélsőérték-kezelés"):
-        tail_mode = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=0)
+        saved_tail = persist("p01_tail", "Nincs szűrés (összes érték)")
+        tail_idx = utils.FILTER_OPTIONS.index(saved_tail) if saved_tail in utils.FILTER_OPTIONS else 0
+        tail_mode = st.selectbox("X szélsőérték-kezelése", utils.FILTER_OPTIONS, index=tail_idx, key="_p01_tail", on_change=save, args=("p01_tail",))
 
         # Manual min/max controls (shown only when selected)
         if tail_mode == "Kézi minimum/maximum":
@@ -106,11 +115,11 @@ with col_settings:
 
     # ----------------------------- Histogram settings -----------------------------
     with st.expander("Hisztogram beállítások"):
-        bins = st.slider("Binek száma", min_value=5, max_value=60, value=25, step=1)
+        bins = st.slider("Binek száma", min_value=5, max_value=60, value=persist("p01_bins", 25), step=1, key="_p01_bins", on_change=save, args=("p01_bins",))
 
     # ----------------------------- Log option -----------------------------
     with st.expander("Skála"):
-        use_log = st.checkbox("Logaritmikus (ln) transzformáció", value=False)
+        use_log = st.checkbox("Logaritmikus (ln) transzformáció", value=persist("p01_log", False), key="_p01_log", on_change=save, args=("p01_log",))
 
 # Apply tail handling
 if tail_mode == "Kézi minimum/maximum":
