@@ -115,8 +115,6 @@ Lehetséges kimenetek:
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
         lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
@@ -125,10 +123,14 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
     
-    ind_idx = utils.get_synced_index(industry_opts, "global_industry")
-    sel_industry = st.selectbox("Ágazat", industry_opts, index=ind_idx)
-    utils.update_synced_state("global_industry", sel_industry)
-
+    default_industry = industry_opts[0]
+    sel_industry = st.selectbox(
+        "Ágazat",
+        industry_opts,
+        index=industry_opts.index(persist("p07_industry", default_industry)),
+        key="_p07_industry",
+        on_change=save, args=("p07_industry",)
+    )
 if sel_industry == "Összes ágazat":
     d = df.copy()
 else:
@@ -180,9 +182,14 @@ available = list(available) + extra_y_labels
 
 with col_settings:
     # Sync Primary (Y) -> Outcome
-    out_idx = utils.get_synced_index(available, "global_primary_var")
-    outcome_choice = st.selectbox("Kimenet", available, index=out_idx)
-    utils.update_synced_state("global_primary_var", outcome_choice)
+    default_y = available[0] if available else None
+    outcome_choice = st.selectbox(
+        "Kimenet",
+        available,
+        index=available.index(persist("p07_y_var", default_y)) if default_y and persist("p07_y_var", default_y) in available else 0,
+        key="_p07_y_var",
+        on_change=save, args=("p07_y_var",)
+    )
 y_col = label_to_col[outcome_choice]
 
 # ------------------------------------------------------

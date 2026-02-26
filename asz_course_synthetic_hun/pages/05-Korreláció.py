@@ -39,8 +39,6 @@ st.markdown(
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     available = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
     if len(available) < 2:
         st.error("Nincs elég elérhető változó az adatokban a korrelációhoz.")
@@ -49,24 +47,30 @@ with col_settings:
     available_keys = list(available.keys())
 
     # baseline index a Változó 1-hez
-    if BASELINE_LABEL in available_keys:
-        x_index = available_keys.index(BASELINE_LABEL)
-    else:
-        x_index = 0
-
-    # Sync Secondary (X)
-    x_index = utils.get_synced_index(available_keys, "global_secondary_var")
-    x_label = st.selectbox("Változó 1", available_keys, index=x_index)
+    default_x = BASELINE_LABEL if BASELINE_LABEL in available_keys else (available_keys[0] if available_keys else None)
+    x_label = st.selectbox(
+        "Változó 1",
+        available_keys,
+        index=available_keys.index(persist("p05_x_var", default_x)) if default_x and persist("p05_x_var", default_x) in available_keys else 0,
+        key="_p05_x_var",
+        on_change=save, args=("p05_x_var",)
+    )
 
     y_options = [k for k in available_keys if k != x_label]
-    
-    # Sync Primary (Y)
-    y_index = utils.get_synced_index(y_options, "global_primary_var")
-    y_label = st.selectbox("Változó 2", y_options, index=y_index)
 
-    utils.update_synced_state("global_secondary_var", x_label)
-    utils.update_synced_state("global_primary_var", y_label)
-
+    # Default for Y: if current Y is same as X, pick another one
+    saved_y = persist("p05_y_var", y_options[0] if y_options else None)
+    if saved_y == x_label:
+        saved_y = y_options[0] if y_options else None
+        st.session_state["p05_y_var"] = saved_y # update state
+        
+    y_label = st.selectbox(
+        "Változó 2",
+        y_options,
+        index=y_options.index(saved_y) if saved_y in y_options else 0,
+        key="_p05_y_var",
+        on_change=save, args=("p05_y_var",)
+    )
     xvar = available[x_label]
     yvar = available[y_label]
 

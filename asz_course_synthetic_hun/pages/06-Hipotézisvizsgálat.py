@@ -180,8 +180,6 @@ with col_sep:
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     available_vars = {k: v for k, v in VAR_MAP.items() if v in cs.columns}
     if not available_vars:
         st.error("Nincs elérhető folytonos változó az adatokban.")
@@ -190,10 +188,14 @@ with col_settings:
     avail_keys = list(available_vars.keys())
     
     # Sync Primary (Y)
-    y_idx = utils.get_synced_index(avail_keys, "global_primary_var")
-    y_label = st.selectbox("Változó", avail_keys, index=y_idx)
-    utils.update_synced_state("global_primary_var", y_label)
-
+    default_y = avail_keys[0] if avail_keys else None
+    y_label = st.selectbox(
+        "Változó",
+        avail_keys,
+        index=avail_keys.index(persist("p06_y_var", default_y)) if default_y and persist("p06_y_var", default_y) in avail_keys else 0,
+        key="_p06_y_var",
+        on_change=save, args=("p06_y_var",)
+    )
     yvar = available_vars[y_label]
     y_is_monetary = yvar in MONETARY_VARS.values()
 

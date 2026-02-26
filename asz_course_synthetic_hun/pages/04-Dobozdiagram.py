@@ -60,8 +60,6 @@ st.markdown(
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     # Ágazati szűrő
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
@@ -71,10 +69,14 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     opts = ["Összes ágazat"] + lab_df["label"].tolist()
     
-    ind_idx = utils.get_synced_index(opts, "global_industry")
-    sel_label = st.selectbox("Ágazat", opts, index=ind_idx)
-    utils.update_synced_state("global_industry", sel_label)
-
+    default_industry = opts[0]
+    sel_label = st.selectbox(
+        "Ágazat",
+        opts,
+        index=opts.index(persist("p04_industry", default_industry)),
+        key="_p04_industry",
+        on_change=save, args=("p04_industry",)
+    )
 scope_all = sel_label == "Összes ágazat"
 df = cs.copy() if scope_all else cs[cs["nace2_name_code"] == sel_label].copy()
 
@@ -119,17 +121,23 @@ x_labels = [COL2NAME.get(c, c) for c in x_candidates]
 y_labels = [COL2NAME.get(c, c) for c in y_candidates]
 
 with col_settings:
-    # Sync Categorical X (Separate key!)
-    x_idx = utils.get_synced_index(x_labels, "global_categorical_var")
-    x_label = st.selectbox("X (kategóriás/dummy)", x_labels, index=x_idx)
+    default_x = x_labels[0] if x_labels else None
+    x_label = st.selectbox(
+        "X (kategóriás/dummy)",
+        x_labels,
+        index=x_labels.index(persist("p04_x_var", default_x)) if default_x and persist("p04_x_var", default_x) in x_labels else 0,
+        key="_p04_x_var",
+        on_change=save, args=("p04_x_var",)
+    )
 
-    # Sync Primary Continuous (Y)
-    y_idx = utils.get_synced_index(y_labels, "global_primary_var")
-    y_label = st.selectbox("Y (folytonos)", y_labels, index=y_idx)
-
-    utils.update_synced_state("global_categorical_var", x_label)
-    utils.update_synced_state("global_primary_var", y_label)
-
+    default_y = y_labels[0] if y_labels else None
+    y_label = st.selectbox(
+        "Y (folytonos)",
+        y_labels,
+        index=y_labels.index(persist("p04_y_var", default_y)) if default_y and persist("p04_y_var", default_y) in y_labels else 0,
+        key="_p04_y_var",
+        on_change=save, args=("p04_y_var",)
+    )
 xvar = NAME2COL.get(x_label, x_label)
 yvar = NAME2COL.get(y_label, y_label)
 

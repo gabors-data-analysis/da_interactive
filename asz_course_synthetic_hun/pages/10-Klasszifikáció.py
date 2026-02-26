@@ -76,8 +76,6 @@ POTENTIAL_X_VARS = [
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     lab_df = pd.DataFrame({"label": df["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
         lab_df["label"].str.extract(r"\((\d{1,2})\)\s*$", expand=False),
@@ -86,10 +84,14 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     industry_opts = ["Összes ágazat"] + lab_df["label"].tolist()
     
-    ind_idx = utils.get_synced_index(industry_opts, "global_industry")
-    sel_industry = st.selectbox("Ágazat", industry_opts, index=ind_idx)
-    utils.update_synced_state("global_industry", sel_industry)
-
+    default_industry = industry_opts[0]
+    sel_industry = st.selectbox(
+        "Ágazat",
+        industry_opts,
+        index=industry_opts.index(persist("p10_industry", default_industry)),
+        key="_p10_industry",
+        on_change=save, args=("p10_industry",)
+    )
     # Model Selection
     m_opts = ["LPM", "Logit", "LPM és Logit"]
     model_choice = st.radio(

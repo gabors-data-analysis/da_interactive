@@ -66,10 +66,7 @@ NACE1_LABELS = {
 # 2. Session State Management
 # -------------------------------------------------------------------------
 def init_session_state():
-    if "real_data" not in st.session_state:
-        st.session_state["real_data"] = False
-    if "sync_on" not in st.session_state:
-        st.session_state.sync_on = False
+    st.session_state.setdefault("real_data", False)
 
 def get_monetary_vars():
     return MONETARY_VARS_REAL if st.session_state.get("real_data") else MONETARY_VARS_SIM
@@ -160,25 +157,6 @@ def setup_page(title_real: str, title_sim: str):
         )
     
     return col_settings, col_viz
-
-def render_sync_option(container):
-    if "sync_on" not in st.session_state:
-        st.session_state.sync_on = False
-    sync_on = container.checkbox("Beállítások szinkronizálása", value=st.session_state.sync_on)
-    st.session_state.sync_on = sync_on
-    return sync_on
-
-def get_synced_index(options: list, key: str) -> int:
-    """Returns the index of the global state value in options if sync is on, else 0."""
-    if st.session_state.sync_on and key in st.session_state:
-        val = st.session_state[key]
-        if val in options:
-            return options.index(val)
-    return 0
-
-def update_synced_state(key: str, value):
-    if st.session_state.sync_on:
-        st.session_state[key] = value
 
 # -------------------------------------------------------------------------
 # 5. Helper Functions

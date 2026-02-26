@@ -35,6 +35,8 @@ if "emp" in cs.columns and "ln_emp" not in cs.columns:
     emp_vals = pd.to_numeric(cs["emp"], errors="coerce")
     with np.errstate(divide="ignore", invalid="ignore"):
         cs["ln_emp"] = np.where(emp_vals > 0, np.log(emp_vals), np.nan)
+if "has_grant_2020" in cs.columns:
+    cs["has_grant_2020"] = pd.to_numeric(cs["has_grant_2020"], errors="coerce")
 
 st.markdown(
     "Válasszon egy **ágazatot**, két **változót**, és egy opcionális **illesztést**. "
@@ -45,8 +47,6 @@ st.markdown(
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     # Ágazati opciók
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
@@ -55,17 +55,22 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
     opts = ["Összes ágazat"] + lab_df["label"].tolist()
     
-    ind_idx = utils.get_synced_index(opts, "global_industry")
-    sel_label = st.selectbox("Ágazat", opts, index=ind_idx)
-    utils.update_synced_state("global_industry", sel_label)
-
+    default_industry = opts[0]
+    sel_label = st.selectbox(
+        "Ágazat",
+        opts,
+        index=opts.index(persist("p02_industry", default_industry)),
+        key="_p02_industry",
+        on_change=save, args=("p02_industry",)
+    )
 scope_all = sel_label == "Összes ágazat"
 
 # Változók
 MONETARY_VARS = utils.get_monetary_vars()
 extra_vars = {
     "Relatív növekedés (%)": "sales_growth_perc", "Log növekedés (log-diff)": "sales_growth_log_diff",
-    "Log értékesítés": "ln_sales", "Log foglalkoztatottak száma": "ln_emp"
+    "Log értékesítés": "ln_sales", "Log foglalkoztatottak száma": "ln_emp",
+    "Kapott támogatást (2020)": "has_grant_2020"
 }
 var_map = {**extra_vars, **utils.NON_MONETARY_VARS, **MONETARY_VARS}
 
@@ -74,17 +79,23 @@ available = {k: v for k, v in var_map.items() if v in cs.columns}
 with col_settings:
     avail_keys = list(available.keys())
     
-    # Sync Secondary Continuous (X)
-    x_idx = utils.get_synced_index(avail_keys, "global_secondary_var")
-    if x_idx == 0 and len(avail_keys) > 2: x_idx = 2 # Default fallback
-    x_label = st.selectbox("X változó", avail_keys, index=x_idx)
+    default_x = avail_keys[2] if len(avail_keys) > 2 else (avail_keys[0] if avail_keys else None)
+    x_label = st.selectbox(
+        "X változó",
+        avail_keys,
+        index=avail_keys.index(persist("p02_x_var", default_x)) if default_x and persist("p02_x_var", default_x) in avail_keys else 0,
+        key="_p02_x_var",
+        on_change=save, args=("p02_x_var",)
+    )
 
-    # Sync Primary Continuous (Y)
-    y_idx = utils.get_synced_index(avail_keys, "global_primary_var")
-    y_label = st.selectbox("Y változó", avail_keys, index=y_idx)
-
-    utils.update_synced_state("global_secondary_var", x_label)
-    utils.update_synced_state("global_primary_var", y_label)
+    default_y = avail_keys[0] if avail_keys else None
+    y_label = st.selectbox(
+        "Y változó",
+        avail_keys,
+        index=avail_keys.index(persist("p02_y_var", default_y)) if default_y and persist("p02_y_var", default_y) in avail_keys else 0,
+        key="_p02_y_var",
+        on_change=save, args=("p02_y_var",)
+    )
 
 xvar = available[x_label]
 yvar = available[y_label]

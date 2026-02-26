@@ -27,8 +27,6 @@ st.markdown(
 with col_settings:
     st.header("Beállítások")
 
-    sync_on = utils.render_sync_option(st)
-
     # Build industry options: ALL first, then sorted by numeric code in the label
     lab_df = pd.DataFrame({"label": cs["nace2_name_code"].dropna().unique()})
     lab_df["__code"] = pd.to_numeric(
@@ -38,11 +36,14 @@ with col_settings:
     lab_df = lab_df.sort_values(["__code", "label"]).drop(columns="__code")
 
     labels = ["Összes ágazat"] + lab_df["label"].tolist()
-    def_idx = utils.get_synced_index(labels, "global_industry") if sync_on else (1 if len(labels) > 1 else 0)
-    
-    selected_label = st.selectbox("Ágazat", labels, index=def_idx)
-    utils.update_synced_state("global_industry", selected_label)
-
+    default_industry = labels[1] if len(labels) > 1 else labels[0]
+    selected_label = st.selectbox(
+        "Ágazat",
+        labels,
+        index=labels.index(persist("p01_industry", default_industry)),
+        key="_p01_industry",
+        on_change=save, args=("p01_industry",)
+    )
 # Variable selection — monetary variables will be displayed in million HUF
 MONETARY_VARS = utils.get_monetary_vars()
 var_map = {**MONETARY_VARS, **utils.NON_MONETARY_VARS}
@@ -53,10 +54,15 @@ if not available:
     st.stop()
 
 with col_settings:
-    # Sync Primary Continuous Var
-    var_idx = utils.get_synced_index(available, "global_primary_var")
-    var_label = st.selectbox("Megjelenítendő változó", available, index=var_idx)
-    utils.update_synced_state("global_primary_var", var_label)
+    default_var = available[0] if available else None
+    var_label = st.selectbox(
+        "Megjelenítendő változó",
+        available,
+        index=available.index(persist("p01_var", default_var)) if default_var and persist("p01_var", default_var) in available else 0,
+        key="_p01_var",
+        on_change=save, args=("p01_var",)
+    )
+
 var = var_map[var_label]
 is_monetary = var in MONETARY_VARS.values()
 
