@@ -225,6 +225,19 @@ with col_settings:
                 high = st.number_input(f"{lbl} max", value=cmax, key=f"max_{col}")
             x_filters[col] = (mode, low, high)
 
+    with st.expander("Klasszifikációs küszöb és költségek", expanded=True):
+        cost_fp = st.number_input("Fals pozitív (FP) költsége", min_value=0.1, value=1.0, step=0.1, key="cost_fp")
+        cost_fn = st.number_input("Fals negatív (FN) költsége", min_value=0.1, value=1.0, step=0.1, key="cost_fn")
+        
+        opt_threshold = cost_fp / (cost_fp + cost_fn)
+        st.markdown(f"**Optimális küszöb:** {opt_threshold:.4f}")
+        
+        threshold = st.slider(
+            "Küszöbérték", min_value=0.0, max_value=1.0,
+            value=float(opt_threshold), step=0.01,
+            key=f"threshold_slider_{cost_fp}_{cost_fn}"
+        )
+
 # ------------------------------------------------------
 # Build Data
 # ------------------------------------------------------
@@ -345,10 +358,6 @@ with col_viz:
             
             row_vals["LPM (Együttható)"] = val_str
             row_se["LPM (Együttható)"] = se_str
-            
-            # LPM AME is same as Coeff
-            row_vals["LPM (AME)"] = val_str
-            row_se["LPM (AME)"] = se_str
 
         # Logit Columns
         if res_logit is not None:
@@ -379,7 +388,12 @@ with col_viz:
     summary_df = pd.DataFrame(summary_rows)
     
     # Stats
+    r2_vals = {"Változó": "R²"}
+    pr2_vals = {"Változó": "Pszeudo R²"}
     footer_vals = {"Változó": "Brier-score"}
+    bias_vals = {"Változó": "Bias"}
+    auc_vals = {"Változó": "AUC"}
+    loss_vals = {"Változó": "Veszteség"}
     obs_vals = {"Változó": "Megfigyelések"}
     sep_vals = {"Változó": "-------"}
 
@@ -387,8 +401,26 @@ with col_viz:
     if res_lpm is not None:
         lpm_pred = res_lpm.predict()
         lpm_brier = np.mean((lpm_pred - Y) ** 2)
-        for col in ["LPM (Együttható)", "LPM (AME)"]:
+        #lpm_bias = np.mean(lpm_pred - Y)
+        #lpm_bias = np.mean(Y - lpm_pred)
+        lpm_bias = np.mean(Y) - np.mean(lpm_pred)
+        
+        lpm_auc = np.nan
+        if roc_auc_score is not None:
+            try: lpm_auc = roc_auc_score(Y, lpm_pred)
+            except: pass
+
+        for col in ["LPM (Együttható)"]:
+            r2_vals[col] = f"{res_lpm.rsquared:.3f}"
+            pr2_vals[col] = ""
             footer_vals[col] = f"{lpm_brier:.3f}"
+            bias_vals[col] = f"{lpm_bias:.3f}"
+            auc_vals[col] = f"{lpm_auc:.3f}" if not np.isnan(lpm_auc) else "-"
+            
+            lpm_pred_bin = (lpm_pred >= threshold).astype(int)
+            fp_lpm = ((Y == 0) & (lpm_pred_bin == 1)).sum()
+            fn_lpm = ((Y == 1) & (lpm_pred_bin == 0)).sum()
+            loss_vals[col] = f"{(fp_lpm * cost_fp + fn_lpm * cost_fn):.1f}"
             obs_vals[col] = f"{int(res_lpm.nobs):,}".replace(",", " ")
             sep_vals[col] = "-------"
 
@@ -396,12 +428,30 @@ with col_viz:
     if res_logit is not None:
         logit_pred = res_logit.predict()
         logit_brier = np.mean((logit_pred - Y) ** 2)
+        #logit_bias = np.mean(logit_pred - Y)
+        #logit_bias = np.mean(Y - logit_pred)
+        logit_bias = np.mean(Y) - np.mean(logit_pred)
+        
+        logit_auc = np.nan
+        if roc_auc_score is not None:
+            try: logit_auc = roc_auc_score(Y, logit_pred)
+            except: pass
+
         for col in ["Logit (Együttható)", "Logit (AME)"]:
+            r2_vals[col] = ""
+            pr2_vals[col] = f"{res_logit.prsquared:.3f}"
             footer_vals[col] = f"{logit_brier:.3f}"
+            bias_vals[col] = f"{logit_bias:.3f}"
+            auc_vals[col] = f"{logit_auc:.3f}" if not np.isnan(logit_auc) else "-"
+            
+            logit_pred_bin = (logit_pred >= threshold).astype(int)
+            fp_logit = ((Y == 0) & (logit_pred_bin == 1)).sum()
+            fn_logit = ((Y == 1) & (logit_pred_bin == 0)).sum()
+            loss_vals[col] = f"{(fp_logit * cost_fp + fn_logit * cost_fn):.1f}"
             obs_vals[col] = f"{int(res_logit.nobs):,}".replace(",", " ")
             sep_vals[col] = "-------"
 
-    summary_df = pd.concat([summary_df, pd.DataFrame([sep_vals, obs_vals, footer_vals])], ignore_index=True)
+    summary_df = pd.concat([summary_df, pd.DataFrame([sep_vals, obs_vals, r2_vals, pr2_vals, footer_vals, bias_vals, auc_vals, loss_vals])], ignore_index=True)
     final_table = summary_df.set_index("Változó")
 
     # Display table
@@ -437,10 +487,10 @@ with col_viz:
         fn = ((y_true == 1) & (y_pred == 0)).sum()
         
         # Matrix for heatmap
-        cm = np.array([[tn, fp], [fn, tp]])
+        cm = np.array([[tn, fn], [fp, tp]])
         
         # Labels
-        group_names = ['Helyes Negatív','Álpozitív','Álnegatív','Helyes Pozitív']
+        group_names = ['Tényleges negatív','Fals negatív','Fals pozitív','Tényleges pozitív']
         group_counts = ["{0:0.0f}".format(value) for value in cm.flatten()]
         group_percentages = ["{0:.2%}".format(value) for value in cm.flatten()/np.sum(cm)]
         
@@ -449,10 +499,10 @@ with col_viz:
         
         sns.heatmap(cm, annot=labels, fmt='', cmap='Blues', cbar=False, ax=ax)
         ax.set_title(f"{model_name} (Küszöb: {threshold:.2f})")
-        ax.set_xlabel('Előrejelzett')
-        ax.set_ylabel('Tény')
-        ax.set_xticklabels(['0', '1'])
-        ax.set_yticklabels(['0', '1'])
+        ax.set_xlabel('Tény')
+        ax.set_ylabel('Előrejelzett')
+        ax.set_xticklabels(['Nem kapott', 'Kapott'])
+        ax.set_yticklabels(['Nem kapott', 'Kapott'])
 
     available_models = {}
     if res_lpm is not None:
@@ -467,33 +517,7 @@ with col_viz:
         
         preds = available_models[cm_model_choice]
 
-        # AUC
-        if roc_auc_score is not None:
-            try:
-                auc_val = roc_auc_score(Y, preds)
-                st.markdown(f"**AUC:** {auc_val:.4f}")
-            except Exception as e:
-                st.warning(f"Hiba az AUC számításánál: {e}")
-
-        # Cost inputs & Optimal Threshold
-        c1, c2 = st.columns(2)
-        cost_fp = c1.number_input("Téves pozitív (FP) költsége", min_value=0.1, value=1.0, step=0.1)
-        cost_fn = c2.number_input("Téves negatív (FN) költsége", min_value=0.1, value=1.0, step=0.1)
-        
-        opt_threshold = cost_fp / (cost_fp + cost_fn)
-        st.info(f"Optimális küszöbérték (költségek alapján): {opt_threshold:.4f}")
-
-        threshold = st.slider(
-            "Klasszifikációs küszöbérték",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(opt_threshold),
-            step=0.0001,
-            format="%.4f",
-            key=f"threshold_slider_{cost_fp}_{cost_fn}"
-        )
-
-        fig, ax = plt.subplots(figsize=(5, 4))
+        fig, ax = plt.subplots(figsize=(3.5, 3))
         plot_confusion_matrix(Y, preds, cm_model_choice, ax)
         st.pyplot(fig)
 
@@ -510,8 +534,7 @@ with col_viz:
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
 
         st.markdown("#### Metrikák")
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3 = st.columns(3)
         m1.metric("Pontosság (Accuracy)", f"{accuracy:.3f}")
-        m2.metric("Érzékenység (Recall)", f"{recall:.3f}")
-        m3.metric("Precizitás (Precision)", f"{precision:.3f}")
-        m4.metric("Specificitás (Specificity)", f"{specificity:.3f}")
+        m2.metric("Érzékenység (Sensitivity)", f"{recall:.3f}")
+        m3.metric("Specifikusság (Specificity)", f"{specificity:.3f}")
