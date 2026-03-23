@@ -6,7 +6,7 @@ RUN apt-get update && \
     r-cran-plotly \
     r-cran-shiny \
     r-cran-knitr \
-    r-cran-htmltools \
+    r-cran-htmltools && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
