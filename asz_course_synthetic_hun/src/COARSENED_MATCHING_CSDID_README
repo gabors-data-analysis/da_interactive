@@ -1,0 +1,80 @@
+COARSENED MATCHING CSDID NOTES
+
+File:
+src/matched_estimator_class.py
+
+Scope of the notes below:
+- Assume the panel is balanced for all needed variables.
+- Assume outcome and matching variables have no missing values.
+- Assume first_treat is a valid integer-valued treatment timing column.
+- Assume there is at least some treated sample.
+
+Under those assumptions, the main remaining hard-error paths are:
+
+1. No never-treated units in the estimation sample
+- _prepare_estimation_data() raises:
+  ValueError("No never-treated units in the estimation sample.")
+
+2. Cohort filtering removes all rows
+- If cohorts= is passed and nothing survives except an empty sample,
+  _prepare_estimation_data() raises:
+  ValueError("No data left after cohort restriction.")
+
+3. first_treat is not constant within unit
+- If a unit appears with multiple first_treat values across time,
+  _prepare_estimation_data() raises:
+  ValueError("<n> units have multiple first_treat values.")
+
+4. There are no post-treatment ATT(g,t) cells anywhere
+- This is now handled safely.
+- Group, calendar, and simple aggregate tables are returned empty
+  instead of failing.
+
+5. No cohort has common support after matching
+- This is now handled safely.
+- fit() can return empty aggregate tables, and event_study_effects
+  falls back to the normalized baseline entry instead of failing.
+
+Important non-crashing notes that still matter:
+
+- Existing aggregate outputs already present in the estimator:
+  - cohort / group effects
+  - event-study effects
+  - calendar-time effects
+  - simple overall ATT
+  - stratum-level pooled effects
+  - stratum x event_time pooled effects
+- Aggregate selection is controlled at fit-time via the aggregate=
+  argument, with "all" as the default.
+- Aggregate standard-error selection is controlled at fit-time via the
+  se_aggregate= argument, with "all" as the default among the requested
+  aggregate outputs.
+- se_aggregate cannot include any aggregation that is not also requested
+  in aggregate.
+
+- The repository already contains plotting helpers that compute
+  stratum-level pooled effects and stratum-by-event-time pooled effects
+  from cell_debug_df:
+  - src/figures.py -> plot_stratum_aggregated_att()
+  - src/figures.py -> plot_stratum_dynamic_effects()
+
+- Those stratum-level summaries are now available as estimator-level
+  returned tables.
+
+Important cost note for stratum-level bootstrap standard errors:
+
+- Point-estimate-only versions are cheap.
+- Making them full bootstrap-tracked outputs adds extra work on every bootstrap draw:
+  grouping and storing results over stratum, and over stratum x event_time.
+- The asymptotic dependence on the number of bootstrap draws stays linear,
+  but both runtime and especially memory usage increase because the number
+  of estimands becomes much larger than the current group/calendar/event/simple
+  set.
+- The stratum x event_time object is the expensive one: its size grows with
+  the number of strata times the number of event times, for every bootstrap draw.
+
+Short version:
+- Existing main aggregates are already implemented.
+- The remaining hard failures under clean-data assumptions are structural edge cases.
+- The estimator now includes stratum-level aggregate tables.
+- Bootstrap standard errors are controlled separately via se_aggregate=.

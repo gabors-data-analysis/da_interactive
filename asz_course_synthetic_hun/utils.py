@@ -62,6 +62,14 @@ NACE1_LABELS = {
     "90-99": "NACE 90–99 (EGYÉB)",
 }
 
+# --- KKV (SME) THRESHOLDS ---
+MICRO_EMP_MAX = 5
+MICRO_SALES_MAX = 700_000  # 1000 HUF -> 700M HUF
+SMALL_EMP_MAX = 50
+SMALL_SALES_MAX = 3_500_000
+MEDIUM_EMP_MAX = 250
+MEDIUM_SALES_MAX = 17_500_000
+
 # -------------------------------------------------------------------------
 # 2. Session State Management
 # -------------------------------------------------------------------------
@@ -120,6 +128,33 @@ def add_nace1_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["nace1_name"] = df["nace1_code"].astype(str).map(NACE1_LABELS).fillna(df["nace1_code"].astype(str))
     return df
 
+def add_sme_category(df: pd.DataFrame) -> pd.DataFrame:
+    """Adds SME (KKV) category to a panel dataset based on the first observed year."""
+    if 'emp' not in df.columns or 'id' not in df.columns or 'year' not in df.columns:
+        df['sme_category'] = "Egyéb"
+        return df
+
+    emp = df['emp']
+    
+    cond_micro = emp < MICRO_EMP_MAX
+    cond_small = (emp >= MICRO_EMP_MAX) & (emp < SMALL_EMP_MAX)
+    cond_medium = (emp >= SMALL_EMP_MAX) & (emp < MEDIUM_EMP_MAX)
+    cond_large = emp >= MEDIUM_EMP_MAX
+    
+    cats = np.full(len(df), "Egyéb", dtype=object)
+    cats[cond_micro] = "Mikró"
+    cats[cond_small] = "Kis"
+    cats[cond_medium] = "Közép"
+    cats[cond_large] = "Nagy"
+    
+    df_cat = pd.DataFrame({'id': df['id'], 'year': df['year'], 'cat': cats})
+    
+    first_year_cats = df_cat.sort_values('year', ascending=True).drop_duplicates('id')
+    cat_map = first_year_cats.set_index('id')['cat'].to_dict()
+    
+    df['sme_category'] = df['id'].map(cat_map).fillna("Egyéb")
+    return df
+
 # -------------------------------------------------------------------------
 # 4. UI Component Abstraction
 # -------------------------------------------------------------------------
@@ -157,6 +192,33 @@ def setup_page(title_real: str, title_sim: str):
         )
     
     return col_settings, col_viz
+
+def sme_filter_ui(prefix: str, persist_func, save_func):
+    """Renders the SME (KKV) filter checkboxes and returns their states."""
+    st.markdown("#### KKV Szűrő")
+    
+    sme_all = st.checkbox("Összes", value=persist_func(f"{prefix}_sme_all", True), key=f"_{prefix}_sme_all", on_change=save_func, args=(f"{prefix}_sme_all",))
+    sme_micro = st.checkbox("Mikró", value=persist_func(f"{prefix}_sme_micro", False), key=f"_{prefix}_sme_micro", on_change=save_func, args=(f"{prefix}_sme_micro",))
+    sme_small = st.checkbox("Kis", value=persist_func(f"{prefix}_sme_small", False), key=f"_{prefix}_sme_small", on_change=save_func, args=(f"{prefix}_sme_small",))
+    sme_medium = st.checkbox("Közép", value=persist_func(f"{prefix}_sme_medium", False), key=f"_{prefix}_sme_medium", on_change=save_func, args=(f"{prefix}_sme_medium",))
+    sme_large = st.checkbox("Nagy", value=persist_func(f"{prefix}_sme_large", False), key=f"_{prefix}_sme_large", on_change=save_func, args=(f"{prefix}_sme_large",))
+    
+    return sme_all, sme_micro, sme_small, sme_medium, sme_large
+
+def apply_sme_filter(df: pd.DataFrame, sme_all: bool, sme_micro: bool, sme_small: bool, sme_medium: bool, sme_large: bool):
+    """Applies the selected SME filters to the dataframe and returns the allowed categories label."""
+    if sme_all:
+        return df, ["Összes"]
+    
+    allowed_cats = []
+    if sme_micro: allowed_cats.append("Mikró")
+    if sme_small: allowed_cats.append("Kis")
+    if sme_medium: allowed_cats.append("Közép")
+    if sme_large: allowed_cats.append("Nagy")
+    if not allowed_cats:
+        st.error("Válasszon ki legalább egy KKV kategóriát, vagy az 'Összes' opciót.")
+        st.stop()
+    return df[df['sme_category'].isin(allowed_cats)], allowed_cats
 
 # -------------------------------------------------------------------------
 # 5. Helper Functions
