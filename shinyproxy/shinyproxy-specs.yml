@@ -69,3 +69,11 @@ proxy:
       port: 8501
       logo-url: https://raw.githubusercontent.com/gabors-data-analysis/da_interactive/refs/heads/main/images/common_support.png
       logo-width: 100%
+
+    - id: ch23_diff_in_diff
+      display-name: Panel Models Estimation - Comparison of Methods
+      description: |
+        Use the tool to compare different methods for estimating panel models on a simulated case study, including pooled OLS, difference-in-differences, fixed effects, and even event studies. See how each method handles confounding and what assumptions they require. Related textbook chapter: <a href="https://gabors-data-analysis.com/chapters/#chapter-23-methods-for-panel-data" target="_blank">23</a>.
+      container-image: ghcr.io/gabors-data-analysis/da_interactive/did-simulation:sha-78e86f6
+      logo-url: https://raw.githubusercontent.com/gabors-data-analysis/da_interactive/refs/heads/main/images/did_simulation.png
+      logo-width: 100%
