@@ -5,3 +5,4 @@
 *.ipynb
 venv
 __pycache__/
+asz_course_synthetic_hun/demo_usage_tracking_app
