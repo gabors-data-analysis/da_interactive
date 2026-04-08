@@ -21,9 +21,30 @@ st.session_state["real_data"] = False
 BASE_DIR = Path(__file__).resolve().parent
 st.session_state["data_path"] = BASE_DIR / "data/synthetic/sim_cs2019_by_nace2_withcats.parquet"
 
+st.session_state["ts_data"] = BASE_DIR / "data/grant_ts.parquet"
+
 # Just for testing: 
 # st.session_state["data_path"] ="C:/Users/Barabás Dániel/work/balance_cross_section2019_to_export_20260129.parquet"
-st.session_state["ts_data"] = BASE_DIR / "data/grant_ts.parquet"
+
+# PANEL_DATA_PATH = Path.home() / "work" / "balanced_panel_to_export_2015_2023.parquet"
+# st.session_state["panel_data_path"] = PANEL_DATA_PATH
+
+# @st.cache_data
+# def load_panel_data(panel_path: str) -> pd.DataFrame:
+#     return pd.read_parquet(panel_path).copy()
+# 
+# 
+# if st.session_state.get("panel_data") is None:
+#     try:
+#         st.session_state["panel_data"] = load_panel_data(str(PANEL_DATA_PATH))
+#     except FileNotFoundError:
+#         st.session_state["panel_data"] = None
+
+
+
+
+
+
 
 
 
